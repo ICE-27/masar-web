@@ -3,8 +3,6 @@
 Safe, verified rides for children. A two-sided platform connecting parents in the
 Eastern Province of Saudi Arabia with verified bus and private-car drivers.
 
-KFUPM · MKT510 Marketing Management · Team 03.
-
 > **Demo project.** No real payments are processed and no real rides are booked.
 
 ---
@@ -78,7 +76,7 @@ geocoding. No API key and no cost. The provider sits behind one interface in
 - **Supabase** (`supabase.ts`) — used automatically when
   `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set.
 - **In-browser demo store** (`local.ts`) — used when they aren't. It enforces
-  the same rules as the SQL (code cooldowns, one verified account per number,
+  the same rules as the SQL (code cooldowns,
   one default address…), so the shareable preview works with no server at all.
 
 ## Milestones 3 to 6 — drivers, services, booking and payments
@@ -261,6 +259,8 @@ in-browser demo store.
 | `TWILIO_ACCOUNT_SID` | Optional, **server only**. Sends verification codes on WhatsApp. |
 | `TWILIO_AUTH_TOKEN` | Optional, **server only**. Never prefix with `NEXT_PUBLIC_`. |
 | `TWILIO_WHATSAPP_FROM` | Optional. The Twilio WhatsApp sender, e.g. `+14155238886`. |
+| `CONTACT_EMAIL` | Optional, server only. Where the contact form is sent. Defaults to the owner's inbox. |
+| `RESEND_API_KEY` | Optional, server only. Send the contact form through Resend instead of FormSubmit. |
 
 ## Deploying to Vercel
 
@@ -278,7 +278,7 @@ touch targets, and `prefers-reduced-motion` respected.
 
 ## How to demo Milestone 2 (about 2 minutes, on a phone)
 
-1. Open `/ar/signup` (or tap **Find a ride**). Fill in the account step.
+1. Tap **Find a ride** → **Create a parent account** (or open `/ar/signup`). Fill in the account step.
 2. Enter a mobile number like `0551234567` → **Send code**. The demo text
    message shows the code. Tap **Fill it in** → **Verify**.
 3. Tap **Detect my location**. Allow location, watch the pin and address fill

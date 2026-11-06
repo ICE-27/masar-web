@@ -60,21 +60,7 @@ export default async function AboutPage({
       </Section>
 
       <Section subtle>
-        <SectionHead title={a.teamTitle} subtitle={a.teamNote} />
-        <ul className="mx-auto mt-12 grid max-w-3xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {a.team.map((member) => (
-            <Card as="li" key={member} className="flex items-center gap-3 p-4">
-              <span
-                aria-hidden
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 text-sm font-bold text-brand-700 dark:bg-brand-800 dark:text-brand-200"
-              >
-                {member.trim()[0]}
-              </span>
-              <span className="text-sm font-medium">{member}</span>
-            </Card>
-          ))}
-        </ul>
-        <div className="mt-12 text-center">
+        <div className="text-center">
           <ButtonLink href={href(locale, "/contact")} variant="secondary">
             {m.nav.contact}
           </ButtonLink>

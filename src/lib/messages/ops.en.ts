@@ -556,6 +556,18 @@ const opsEn = {
   },
 
   /* ---- Parents: search, service, booking ------------------------------------ */
+  gate: {
+    title: "Sign in to find a ride",
+    subtitle: "Choose how you use Masar.",
+    parentTitle: "I'm a parent",
+    parentText: "Find verified drivers whose routes pass near your home, and book rides for your children.",
+    parentSignUp: "Create a parent account",
+    driverTitle: "I'm a driver",
+    driverText: "Offer the seats you already drive past every day, and get paid your full price.",
+    driverJoin: "Join as a driver",
+    signIn: "Sign in",
+  },
+
   search: {
     title: "Find a ride",
     subtitle: "Verified drivers whose routes pass near your home.",
@@ -806,7 +818,7 @@ const opsEn = {
     number: "Invoice no.",
     date: "Date",
     seller: "Seller",
-    sellerName: "Masar | مسار — a KFUPM MKT510 student demo",
+    sellerName: "Masar | مسار — demo",
     vatNo: "VAT registration no.",
     vatPending: "To be issued (demo)",
     buyer: "Customer",

@@ -74,7 +74,6 @@ export function SiteFooter({ locale, m }: { locale: Locale; m: Messages }) {
           <p>
             © {new Date().getFullYear()} {m.meta.brand}. {m.footer.rights}
           </p>
-          <p className="max-w-md sm:text-end">{m.footer.project}</p>
         </div>
       </div>
     </footer>

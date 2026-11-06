@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
  * POST /api/send-otp   body: { phone }   header: Authorization: Bearer <user session>
  *
  * Asks the database for a one-time code *as the signed-in user* (so the
- * database's own rules apply: 30 s cooldown, 5 an hour, one verified account
- * per number), then sends that code to the user's WhatsApp through Twilio.
+ * database's own rules apply: 30 s cooldown, 5 an hour),
+ * then sends that code to the user's WhatsApp through Twilio.
  *
  * Nothing else can be sent through this route: the message text is fixed and
  * the code comes from the database, never from the browser.

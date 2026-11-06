@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Alert, Field, Input, Select } from "@/components/form";
-import { IconBus, IconCar, IconLocate, IconPin, IconSearch, IconSpinner } from "@/components/icons";
+import { IconBus, IconCar, IconLocate, IconPin, IconSearch, IconSpinner, IconUsers } from "@/components/icons";
 import { AppLink as Link } from "@/components/link";
 import { RouteMap, RouteSketch, useIsDark } from "@/components/map/route-map-lazy";
 import { Avatar, EmptyState, ErrorNote, LoadingBlocks, Tabs, VerifiedBadge, useLoad } from "@/components/ops/bits";
-import { cn } from "@/components/ui";
+import { ButtonLink, cn } from "@/components/ui";
 import type { Address, Child, SearchData, ServiceRecord } from "@/lib/data";
 import { formatTime, weekdayNames } from "@/lib/domain/dates";
 import { matchService, type MatchResult } from "@/lib/domain/match";
@@ -52,7 +52,67 @@ type Filters = {
 
 const NO_FILTERS: Filters = { type: "any", vehicle: "any", gender: "any", attendant: "any", maxPrice: "", days: [], ac: false, cameras: false, seatbelts: false, maxJourney: "", destination: "" };
 
+/** Finding a ride needs an account: visitors first choose parent or driver. */
 export function SearchPage({ locale, m }: { locale: Locale; m: AppMessages }) {
+  const { status } = useAuth();
+  if (status === "loading") {
+    return (
+      <div className="container-page max-w-3xl py-10">
+        <LoadingBlocks n={2} />
+      </div>
+    );
+  }
+  if (status !== "signed-in") return <RoleGate locale={locale} m={m} />;
+  return <SearchInner locale={locale} m={m} />;
+}
+
+function RoleGate({ locale, m }: { locale: Locale; m: AppMessages }) {
+  const G = m.ops.gate;
+  const next = encodeURIComponent(href(locale, "/search"));
+  const cards = [
+    {
+      key: "parent",
+      icon: <IconUsers width={26} height={26} />,
+      title: G.parentTitle,
+      text: G.parentText,
+      primary: { href: href(locale, "/signup"), label: G.parentSignUp },
+      secondary: { href: `${href(locale, "/login")}?next=${next}`, label: G.signIn },
+    },
+    {
+      key: "driver",
+      icon: <IconBus width={26} height={26} />,
+      title: G.driverTitle,
+      text: G.driverText,
+      primary: { href: href(locale, "/driver/join"), label: G.driverJoin },
+      secondary: { href: `${href(locale, "/login")}?next=${encodeURIComponent(href(locale, "/driver"))}`, label: G.signIn },
+    },
+  ];
+  return (
+    <div className="mesh-hero min-h-[calc(100dvh-4rem)] pb-16">
+      <div className="container-page max-w-3xl pt-10 sm:pt-16">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{G.title}</h1>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-muted sm:text-base">{G.subtitle}</p>
+        </div>
+        <ul className="mt-8 grid gap-4 sm:grid-cols-2">
+          {cards.map((c) => (
+            <li key={c.key} className="flex flex-col rounded-2xl border border-[var(--line)] bg-[var(--card)] p-6 shadow-[var(--shadow-soft)]">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">{c.icon}</span>
+              <h2 className="mt-4 text-lg font-bold">{c.title}</h2>
+              <p className="mt-1.5 flex-1 text-sm leading-relaxed text-muted">{c.text}</p>
+              <div className="mt-5 flex flex-col gap-2.5">
+                <ButtonLink href={c.primary.href} className="w-full">{c.primary.label}</ButtonLink>
+                <ButtonLink href={c.secondary.href} variant="secondary" className="w-full">{c.secondary.label}</ButtonLink>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function SearchInner({ locale, m }: { locale: Locale; m: AppMessages }) {
   const S = m.ops.search;
   const { backend, status, profile } = useAuth();
   const dark = useIsDark();

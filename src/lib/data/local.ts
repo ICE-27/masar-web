@@ -3,8 +3,8 @@
  *
  * Used when Supabase isn't configured (the shareable preview, or a fresh clone
  * with no .env). It follows the same rules as the SQL in
- * supabase/migrations/0001_parent_onboarding.sql — one verified account per
- * number, code cooldowns and expiry, first address becomes the default, limits —
+ * supabase/migrations/0001_parent_onboarding.sql — code cooldowns
+ * and expiry, first address becomes the default, limits —
  * so the screens behave identically against either backend.
  *
  * Everything lives in this browser's storage. Nothing leaves the device.
@@ -316,9 +316,6 @@ export function createLocalBackend(options: LocalOptions = {}): Backend {
       const db = load();
       const user = requireUser(db);
       if (!/^\+9665\d{8}$/.test(phone)) throw new DataError("phone_invalid");
-      if (db.profiles.some((p) => p.phone === phone && p.phoneVerifiedAt && p.id !== user.id)) {
-        throw new DataError("phone_taken");
-      }
       const mine = db.otps.filter((o) => o.userId === user.id);
       const last = mine.reduce((m, o) => Math.max(m, o.createdAt), 0);
       const t = now();
@@ -364,10 +361,6 @@ export function createLocalBackend(options: LocalOptions = {}): Backend {
         return { ok: false, attemptsLeft: 5 - otp.attempts };
       }
       otp.consumedAt = now();
-      if (db.profiles.some((p) => p.phone === otp.phone && p.phoneVerifiedAt && p.id !== user.id)) {
-        save(db);
-        throw new DataError("phone_taken");
-      }
       const p = db.profiles.find((x) => x.id === user.id)!;
       p.phone = otp.phone;
       p.phoneVerifiedAt = iso(now());

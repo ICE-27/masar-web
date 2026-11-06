@@ -554,6 +554,18 @@ const opsAr: OpsMessages = {
     refunded: "مسترد {amount}",
   },
 
+  gate: {
+    title: "سجّل دخولك للبحث عن رحلة",
+    subtitle: "اختر طريقة استخدامك لمسار.",
+    parentTitle: "أنا ولي أمر",
+    parentText: "اعثر على سائقين موثّقين تمر مساراتهم قرب منزلك، واحجز رحلات أبنائك.",
+    parentSignUp: "أنشئ حساب ولي أمر",
+    driverTitle: "أنا سائق",
+    driverText: "اعرض المقاعد على الطريق الذي تسلكه كل يوم، واستلم سعرك كاملًا.",
+    driverJoin: "انضم كسائق",
+    signIn: "تسجيل الدخول",
+  },
+
   search: {
     title: "ابحث عن توصيل",
     subtitle: "سائقون موثّقون تمر مساراتهم قرب منزلك.",
@@ -804,7 +816,7 @@ const opsAr: OpsMessages = {
     number: "رقم الفاتورة",
     date: "التاريخ",
     seller: "البائع",
-    sellerName: "مسار | Masar — مشروع طلابي تجريبي، جامعة الملك فهد، MKT510",
+    sellerName: "مسار | Masar — نسخة تجريبية",
     vatNo: "الرقم الضريبي",
     vatPending: "سيصدر لاحقًا (تجريبي)",
     buyer: "العميل",

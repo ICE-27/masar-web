@@ -79,9 +79,8 @@ create table if not exists public.profiles (
   updated_at               timestamptz not null default now()
 );
 
--- One verified account per mobile number
-create unique index if not exists profiles_verified_phone_key
-  on public.profiles (phone) where phone_verified_at is not null;
+-- Demo: the same mobile number may be verified on several accounts
+drop index if exists public.profiles_verified_phone_key;
 
 drop trigger if exists profiles_touch on public.profiles;
 create trigger profiles_touch before update on public.profiles
@@ -433,12 +432,6 @@ begin
   if p_phone !~ '^\+9665[0-9]{8}$' then
     raise exception 'phone_invalid' using errcode = 'P0001';
   end if;
-  if exists (
-    select 1 from public.profiles
-     where phone = p_phone and phone_verified_at is not null and id <> uid
-  ) then
-    raise exception 'phone_taken' using errcode = 'P0001';
-  end if;
 
   select max(created_at) into v_last from public.phone_otps where user_id = uid;
   if v_last is not null and v_last > now() - make_interval(secs => v_cooldown) then
@@ -504,13 +497,6 @@ begin
   end if;
 
   update public.phone_otps set consumed_at = now() where id = otp.id;
-
-  if exists (
-    select 1 from public.profiles
-     where phone = otp.phone and phone_verified_at is not null and id <> uid
-  ) then
-    raise exception 'phone_taken' using errcode = 'P0001';
-  end if;
 
   perform set_config('masar.otp_verified', 'on', true);
   update public.profiles

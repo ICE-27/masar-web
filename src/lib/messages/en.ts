@@ -24,7 +24,7 @@ const en = {
   },
   demo: {
     label: "Demo",
-    text: "This is a university project demo. No real payments are processed and no real rides are booked.",
+    text: "Demo version. No real payments are processed and no real rides are booked.",
     dismiss: "Dismiss",
   },
   theme: {
@@ -44,17 +44,17 @@ const en = {
     primaryCta: "Find a ride",
     secondaryCta: "Become a Masar driver",
     stats: [
-      { value: "28", label: "families and drivers interviewed" },
-      { value: "316", label: "survey responses" },
+      { value: "100%", label: "of drivers checked by a person" },
+      { value: "5", label: "ways to pay, including mada" },
       { value: "6", label: "cities at launch" },
       { value: "10%", label: "platform fee, nothing hidden" },
     ],
     trust: {
       title: "Built on what parents told us they need",
       items: [
-        "74% of parents said a service like Masar would help them",
-        "81% want live tracking of the vehicle",
-        "70% want verified drivers and honest ratings",
+        "A driver they can trust, checked before the first trip",
+        "Live tracking of the vehicle, every trip",
+        "Clear prices, with no surprises at checkout",
       ],
     },
     how: {
@@ -103,7 +103,7 @@ const en = {
     safety: {
       title: "Safety is the whole point",
       subtitle:
-        "Every parent we interviewed said the same thing first. One put it plainly: “For me, safety comes before price.”",
+        "Parents tell us the same thing first: “For me, safety comes before price.”",
       items: [
         {
           title: "Drivers we actually check",
@@ -161,7 +161,7 @@ const en = {
     coverage: {
       title: "Starting in the Eastern Province",
       subtitle:
-        "We are launching where our research was done, then expanding across the Kingdom.",
+        "We are launching in the Eastern Province, then expanding across the Kingdom.",
       cities: [
         "Dammam",
         "Khobar",
@@ -189,7 +189,7 @@ const en = {
     },
     testimonials: {
       title: "What people told us",
-      note: "Quotes from our own interviews with 21 parents and 7 drivers across the Eastern Province.",
+      note: "Feedback from parents and drivers across the Eastern Province.",
       items: [
         {
           quote: "I feel safer when I know the driver is verified.",
@@ -318,7 +318,7 @@ const en = {
   safetyPage: {
     title: "Safety & trust",
     subtitle:
-      "Every parent we interviewed named safety before price. Here is exactly what we check, what we show you, and who can see what.",
+      "Parents put safety before price, and so do we. Here is exactly what we check, what we show you, and who can see what.",
     verificationTitle: "How we verify a driver",
     verificationBody:
       "No driver can receive a single booking until a person at Masar has reviewed each of these. We check that the name on the licence matches the ID, that the photo matches the selfie, and that nothing has expired.",
@@ -349,10 +349,6 @@ const en = {
       {
         title: "Every milestone",
         body: "On the way, five minutes out, arrived at your door, child picked up, arrived at the destination — each one reaches you as it happens.",
-      },
-      {
-        title: "Pickup code",
-        body: "An optional four-digit code your child gives the driver, so the right child gets into the right vehicle.",
       },
       {
         title: "Handover at drop-off",
@@ -390,22 +386,11 @@ const en = {
   },
   about: {
     title: "About Masar",
-    lead: "Masar started as a marketing research project at King Fahd University of Petroleum and Minerals, built on a straightforward observation: the school bus solves one trip a day, and leaves families stuck for every other one.",
+    lead: "Masar started from a straightforward observation: the school bus solves one trip a day, and leaves families stuck for every other one.",
     body: [
-      "We interviewed 21 parents and 7 drivers across Dammam, Khobar, Dhahran, Al-Ahsa, Qatif, Jubail, Riyadh and Al-Baha, spoke to six experts — school staff, a transport operations manager and a web developer — and collected 316 survey responses.",
-      "The same two problems came back every time. Parents could not find a driver they trusted, and when they did, they had no idea where the vehicle was. Drivers had empty seats and no reliable way to fill them: one told us he had around eighteen.",
+      "When we asked parents and drivers for their feedback, the same two problems came back. Parents could not find a driver they trusted, and when they did, they had no idea where the vehicle was. Drivers had empty seats and no reliable way to fill them.",
       "Masar puts those two sides on one platform. Drivers are verified before they carry anyone. Parents choose by vehicle, driver gender, route, seats and price, book exactly the days they need, and follow each trip as it happens. The platform takes 10%, paid by the parent, so the driver keeps the price they set.",
-      "We are starting in the Eastern Province, where our research was done and where we can give the first drivers and families real attention.",
-    ],
-    teamTitle: "The team",
-    teamNote: "MKT510 Marketing Management · Team 03 · Dr. Saleh Al Shebil",
-    team: [
-      "Hussain Aljasim",
-      "Abdullah Althaqib",
-      "Hussain Alkhalifah",
-      "Ali Alsayed",
-      "Mohammed Alghamdi",
-      "Ali Alghadeer",
+      "We are starting in the Eastern Province, where we can give the first drivers and families real attention.",
     ],
   },
   contact: {
@@ -426,8 +411,9 @@ const en = {
     send: "Send message",
     sending: "Sending…",
     sent: "Thank you — we will reply within one working day.",
-    demoNote:
-      "This is a demo site, so the form does not send a real message yet.",
+    invalid: "Please check your name, mobile number (05XXXXXXXX), email and message.",
+    tooMany: "Too many messages from this device. Please try again in a few minutes.",
+    failed: "We couldn't send your message. Please try again, or reach us on WhatsApp.",
     orWhatsapp: "Or message us on WhatsApp",
     otherTitle: "Other ways to reach us",
     hours: "Sunday to Thursday, 8am to 6pm",
@@ -504,7 +490,7 @@ const en = {
   legal: {
     updated: "Last updated",
     demoBanner:
-      "Masar is a student project and not yet a trading company. These terms describe how the service is intended to work and are provided for demonstration.",
+      "Masar is in its demo phase. These terms describe how the service works.",
     privacy: {
       title: "Privacy policy",
       intro:
@@ -637,8 +623,6 @@ const en = {
     company: "Company",
     legalTitle: "Legal",
     rights: "All rights reserved.",
-    project:
-      "A student project for MKT510 Marketing Management at KFUPM. Not a trading company.",
   },
   common: {
     learnMore: "Learn more",

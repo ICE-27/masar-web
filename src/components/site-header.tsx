@@ -110,6 +110,7 @@ export function SiteHeader({
             <Link
               href={`/${other}${swapPath}`}
               hrefLang={other}
+              onClick={() => rememberLocale(other)}
               aria-label={m.lang.label}
               className="hidden sm:inline-flex h-10 items-center rounded-full border border-[var(--line)] px-3.5 text-sm font-medium text-muted transition-colors hover:border-brand-300 hover:text-brand-600 dark:hover:text-brand-300"
             >
@@ -238,6 +239,7 @@ export function SiteHeader({
             <Link
               href={`/${other}${swapPath}`}
               hrefLang={other}
+              onClick={() => rememberLocale(other)}
               className="mt-1 text-center text-sm font-medium text-muted underline underline-offset-4"
             >
               {m.lang.toggle}
@@ -247,4 +249,13 @@ export function SiteHeader({
       </div>
     </header>
   );
+}
+
+/** Remember the visitor's language so the bare domain opens it next time (Arabic otherwise). */
+function rememberLocale(locale: Locale) {
+  try {
+    document.cookie = `masar-locale=${locale}; path=/; max-age=31536000; samesite=lax`;
+  } catch {
+    /* cookies blocked: Arabic stays the default */
+  }
 }

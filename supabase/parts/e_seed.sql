@@ -209,8 +209,8 @@ begin
     "pricing": [{"serviceType": "shared_bus", "dailyH": 1600, "oneWayH": 1000},
                 {"serviceType": "whole_bus", "dailyH": 70000, "oneWayH": 42000, "attendantAvailable": true, "attendantFeeH": 9000}],
     "services": [
-      {"name": "Ad Dawhah & KFUPM → British International School Al Khobar", "destination": "British International School Al Khobar",
-       "start": [26.3240, 50.1520], "stops": [{"lat": 26.3070, "lng": 50.1440, "label": "KFUPM"},
+      {"name": "Ad Dawhah & Al Jamiah → British International School Al Khobar", "destination": "British International School Al Khobar",
+       "start": [26.3240, 50.1520], "stops": [{"lat": 26.3070, "lng": 50.1440, "label": "Al Jamiah"},
                                               {"lat": 26.2770, "lng": 50.1880, "label": "Al Ulaya"}],
        "times": [365, 400, 420, 810, 870],
        "coverage": [["dhr-doha", 0], ["dhr-jamiah", 0], ["dhr-qusur", 0], ["khb-ulaya", 0], ["khb-thuqbah", 0], ["khb-hizam", 0]]}
@@ -376,3 +376,9 @@ $$;
 revoke execute on function public.seed_user(text, text, text, text, text) from public, anon, authenticated;
 revoke execute on function public.seed_driver(text, jsonb) from public, anon, authenticated;
 revoke execute on function public.seed_demo(text) from public, anon, authenticated;
+
+-- Tidy demo data created by an earlier version of this file
+update public.services
+   set name = replace(name, 'KFUPM', 'Al Jamiah'),
+       stops = replace(stops::text, '"KFUPM"', '"Al Jamiah"')::jsonb
+ where name like '%KFUPM%' or stops::text like '%"KFUPM"%';

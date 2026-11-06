@@ -36,7 +36,7 @@ describe("local demo backend", () => {
     await expectCode(b.signUp({ email: "a@x.com", password: "masar2026", fullName: "X Y", locale: "en" }), "email_taken");
   });
 
-  it("verifies a phone with cooldown, attempts and one account per number", async () => {
+  it("verifies a phone with cooldown and attempts, and lets the same number verify another account (demo)", async () => {
     await b.signUp({ email: "a@x.com", password: "masar2026", fullName: "Sara", locale: "en" });
     const otp = await b.requestPhoneOtp("+966512345678");
     expect(otp.demoCode).toMatch(/^\d{6}$/);
@@ -47,7 +47,8 @@ describe("local demo backend", () => {
 
     await b.signOut();
     await b.signUp({ email: "b@x.com", password: "masar2026", fullName: "Omar", locale: "ar" });
-    await expectCode(b.requestPhoneOtp("+966512345678"), "phone_taken");
+    const again = await b.requestPhoneOtp("+966512345678");
+    expect((await b.verifyPhoneOtp(again.demoCode!)).ok).toBe(true);
   });
 
   it("expires codes", async () => {

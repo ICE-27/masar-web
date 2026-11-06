@@ -142,7 +142,7 @@ insert into public.districts (id, city, name_en, name_ar, lat, lng) values
   ('khb-thuqbah',      'Khobar',  'Ath Thuqbah',          'الثقبة',              26.2850, 50.1780),
   ('khb-hamra',        'Khobar',  'Al Hamra',             'الحمراء',             26.3000, 50.1700),
   ('dhr-doha',         'Dhahran', 'Ad Dawhah',            'الدوحة',              26.3240, 50.1520),
-  ('dhr-jamiah',       'Dhahran', 'Al Jamiah (KFUPM)',    'الجامعة',             26.3070, 50.1440),
+  ('dhr-jamiah',       'Dhahran', 'Al Jamiah',            'الجامعة',             26.3070, 50.1440),
   ('dhr-qusur',        'Dhahran', 'Al Qusur',             'القصور',              26.2900, 50.1300),
   ('qtf-center',       'Qatif',   'Al Qatif',             'القطيف',              26.5560, 50.0080),
   ('qtf-saihat',       'Qatif',   'Saihat',               'سيهات',               26.4830, 50.0410),
