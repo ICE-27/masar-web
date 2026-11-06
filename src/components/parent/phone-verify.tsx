@@ -43,16 +43,39 @@ export function PhoneVerify({
     return () => clearTimeout(id);
   }, [cooldown]);
 
+  const [whatsappSent, setWhatsappSent] = useState(false);
+
   async function send(target: string) {
     setError(null);
     setBusy(true);
+    setWhatsappSent(false);
     try {
       const r = await backend.requestPhoneOtp(target);
       setSentTo(target);
-      setDemoCode(r.demoCode);
       setCooldown(r.cooldownSeconds);
       setCode("");
       setStage("code");
+
+      // Try to send the code via WhatsApp
+      if (r.demoCode) {
+        try {
+          const wa = await fetch("/api/send-otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: target, code: r.demoCode }),
+          });
+          const waRes = await wa.json();
+          if (waRes.sent) {
+            setWhatsappSent(true);
+            setDemoCode(null); // hide on-screen code when WhatsApp works
+          } else {
+            setDemoCode(r.demoCode); // fallback: show on screen
+          }
+        } catch {
+          setDemoCode(r.demoCode); // fallback: show on screen
+        }
+      }
+
       setTimeout(() => codeRef.current?.focus(), 50);
     } catch (e) {
       if (e instanceof DataError && e.code === "otp_cooldown") setCooldown(Number(e.detail) || 30);
@@ -124,6 +147,25 @@ export function PhoneVerify({
 
   return (
     <div className="space-y-5">
+      {whatsappSent ? (
+        <div
+          role="status"
+          className="animate-fade-up overflow-hidden rounded-2xl border border-brand-200 bg-brand-50 shadow-[var(--shadow-soft)] dark:border-brand-800 dark:bg-brand-950/50"
+        >
+          <div className="flex items-center gap-2 px-4 py-3">
+            <svg viewBox="0 0 24 24" width={20} height={20} fill="#25D366" aria-hidden>
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+              <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.96 7.96 0 0 1-4.11-1.14l-.29-.174-3.01.79.81-2.95-.19-.3A7.96 7.96 0 0 1 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8z"/>
+            </svg>
+            <p className="text-sm font-medium text-brand-800 dark:text-brand-200">
+              {locale === "ar"
+                ? "تم إرسال رمز التحقق عبر واتساب"
+                : "Verification code sent via WhatsApp"}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {demoCode ? (
         <div
           role="status"
