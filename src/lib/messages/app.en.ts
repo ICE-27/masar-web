@@ -173,7 +173,7 @@ const appEn = {
     makeDefault: "Use as my default pickup address",
     save: "Save address",
     pinRequired: "Set your location on the map first.",
-    attribution: "Map © OpenStreetMap contributors © CARTO",
+    attribution: "© OpenStreetMap contributors",
   },
 
   child: {

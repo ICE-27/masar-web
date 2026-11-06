@@ -11,8 +11,7 @@ import { Circle, MapContainer, Marker, TileLayer, useMap, useMapEvents } from "r
 import type { LatLng } from "@/lib/geo";
 import { DEFAULT_CENTER } from "@/lib/geo";
 
-const LIGHT = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-const DARK = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const TILES = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 // The Masar pin, as a map marker
 const pinIcon = L.divIcon({
@@ -89,11 +88,11 @@ export default function MapView({
         zoomControl
       >
         <TileLayer
-          key={dark ? "dark" : "light"}
-          url={dark ? DARK : LIGHT}
-          subdomains="abcd"
-          maxZoom={20}
+          url={TILES}
+          subdomains="abc"
+          maxZoom={19}
           attribution={attribution}
+          className={dark ? "masar-dark-tiles" : undefined}
         />
         <ClickToPlace onPick={onPick} />
         <FlyTo point={point} focusKey={focusKey} />

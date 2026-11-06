@@ -171,7 +171,7 @@ const appAr: AppMessages = {
     makeDefault: "اجعله عنوان الاستلام الافتراضي",
     save: "احفظ العنوان",
     pinRequired: "حدّد موقعك على الخريطة أولًا.",
-    attribution: "الخريطة © مساهمو OpenStreetMap © CARTO",
+    attribution: "© مساهمو OpenStreetMap",
   },
 
   child: {

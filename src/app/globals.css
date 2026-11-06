@@ -251,3 +251,6 @@
   color: #e9f1ee;
   border-color: #1e3029;
 }
+.masar-dark-tiles {
+  filter: brightness(0.7) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+}
