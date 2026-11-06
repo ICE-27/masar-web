@@ -1,26 +1,214 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Manual (class-based) dark mode so the toggle works, with system default applied in <head>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ---- Masar brand, taken from the logo ---- */
+  --color-brand-50: #e6f5ef;
+  --color-brand-100: #c2e7d8;
+  --color-brand-200: #8fd4ba;
+  --color-brand-300: #5bc09c;
+  --color-brand-400: #2eac83;
+  --color-brand-500: #009767; /* primary — the logo pin */
+  --color-brand-600: #00835a;
+  --color-brand-700: #00704d;
+  --color-brand-800: #005c3f;
+  --color-brand-900: #004832;
+  --color-brand-950: #00301f;
+
+  --color-accent-50: #fef8ec;
+  --color-accent-100: #fcedce;
+  --color-accent-200: #f9dea3;
+  --color-accent-300: #f5ce76;
+  --color-accent-400: #f0b94f; /* accent — the amber dot */
+  --color-accent-500: #e2a52f;
+  --color-accent-600: #c08724;
+  --color-accent-700: #96681c;
+
+  --font-latin: "Inter Variable", "Inter";
+  --font-sans: var(--font-latin), "IBM Plex Sans Arabic", ui-sans-serif,
+    system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-arabic: "IBM Plex Sans Arabic", "Tajawal", var(--font-latin),
+    ui-sans-serif, sans-serif;
+
+  --radius-card: 1rem;
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.04), 0 16px 40px -16px rgb(0 0 0 / 0.18);
+
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-pulse-live: pulse-live 2s ease-in-out infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes pulse-live {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.35);
+  }
+}
+
+:root {
+  --page: #ffffff;
+  --page-subtle: #f7faf9;
+  --ink: #0f172a;
+  --ink-muted: #475569;
+  --line: #e2e8f0;
+  --card: #ffffff;
+}
+
+.dark {
+  --page: #0a1410;
+  --page-subtle: #0f1d18;
+  --ink: #e9f1ee;
+  --ink-muted: #9fb3ab;
+  --line: #1e3029;
+  --card: #0f1d18;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--page);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  html[lang="ar"] body {
+    font-family: var(--font-arabic);
+    /* Arabic reads better with a touch more line height */
+    line-height: 1.85;
+  }
+
+  /* Visible, brand-coloured focus ring everywhere — WCAG 2.4.7 */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .text-muted {
+    color: var(--ink-muted);
+  }
+
+  .bg-page {
+    background-color: var(--page);
+  }
+
+  .bg-subtle {
+    background-color: var(--page-subtle);
+  }
+
+  .bg-card {
+    background-color: var(--card);
+  }
+
+  .border-line {
+    border-color: var(--line);
+  }
+
+  /* Page gutter: 16px on phones, growing with the viewport */
+  .container-page {
+    width: 100%;
+    margin-inline: auto;
+    padding-inline: 1rem;
+    max-width: 80rem;
+  }
+
+  @media (min-width: 640px) {
+    .container-page {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container-page {
+      padding-inline: 2rem;
+    }
+  }
+
+  /* Logical-direction helper: flips automatically in RTL */
+  .start-arrow {
+    display: inline-block;
+    transition: transform 0.2s ease;
+  }
+
+  html[dir="rtl"] .start-arrow {
+    transform: scaleX(-1);
+  }
+
+  .group:hover .start-arrow {
+    transform: translateX(3px);
+  }
+
+  html[dir="rtl"] .group:hover .start-arrow {
+    transform: scaleX(-1) translateX(3px);
+  }
+
+  .mesh-hero {
+    background-image:
+      radial-gradient(
+        ellipse 70% 60% at 15% 0%,
+        rgb(0 151 103 / 0.14),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 55% 50% at 95% 10%,
+        rgb(240 185 79 / 0.16),
+        transparent 60%
+      );
+  }
+
+  .dark .mesh-hero {
+    background-image:
+      radial-gradient(
+        ellipse 70% 60% at 15% 0%,
+        rgb(0 151 103 / 0.22),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 55% 50% at 95% 10%,
+        rgb(240 185 79 / 0.1),
+        transparent 60%
+      );
+  }
 }
