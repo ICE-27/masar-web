@@ -1,3 +1,5 @@
+import appEn from "./app.en";
+
 const en = {
   meta: {
     brand: "Masar",
@@ -649,6 +651,7 @@ const en = {
     step: "Step",
     sample: "Sample",
   },
+  app: appEn,
 };
 
 export default en;

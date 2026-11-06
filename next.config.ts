@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   images: { unoptimized: isStaticExport },
   trailingSlash: isStaticExport,
   eslint: { ignoreDuringBuilds: false },
+  // The root layout is app/[locale]/layout.tsx (it owns <html lang dir>), so
+  // URLs outside /ar and /en are handled by app/global-not-found.tsx.
+  experimental: { globalNotFound: true },
 };
 
 export default nextConfig;

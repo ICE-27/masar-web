@@ -1,4 +1,5 @@
 import type { Messages } from "./en";
+import appAr from "./app.ar";
 
 const ar: Messages = {
   meta: {
@@ -641,6 +642,7 @@ const ar: Messages = {
     step: "الخطوة",
     sample: "نموذج",
   },
+  app: appAr,
 };
 
 export default ar;

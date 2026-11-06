@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "../globals.css";
 import { notFound } from "next/navigation";
 // Fonts come from npm rather than Google Fonts: the build then needs no
 // network access and the site serves them from its own domain.
@@ -10,6 +11,7 @@ import "@fontsource/ibm-plex-sans-arabic/arabic-700.css";
 import "@fontsource/ibm-plex-sans-arabic/latin-400.css";
 import "@fontsource/ibm-plex-sans-arabic/latin-600.css";
 import type { ReactNode } from "react";
+import { AuthProvider } from "@/components/auth-provider";
 import { DemoRibbon } from "@/components/demo-ribbon";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -114,12 +116,14 @@ export default async function LocaleLayout({
         >
           {typed === "ar" ? "تخطَّ إلى المحتوى" : "Skip to content"}
         </a>
-        <SiteHeader locale={typed} m={m} />
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-        <SiteFooter locale={typed} m={m} />
-        <DemoRibbon m={m} />
+        <AuthProvider>
+          <SiteHeader locale={typed} m={m} />
+          <main id="main" className="flex-1">
+            {children}
+          </main>
+          <SiteFooter locale={typed} m={m} />
+          <DemoRibbon m={m} />
+        </AuthProvider>
       </body>
     </html>
   );

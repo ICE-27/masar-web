@@ -3,6 +3,8 @@
 import { AppLink as Link } from "./link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useAuth } from "./auth-provider";
+import { IconLogout, IconUser } from "./icons";
 import { Logo } from "./logo";
 import { ThemeToggle } from "./theme";
 import { ButtonLink, cn } from "./ui";
@@ -21,6 +23,9 @@ export function SiteHeader({
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
+  const { status, backend } = useAuth();
+  const signedIn = status === "signed-in";
+  const a = m.app.common;
 
   const items: NavItem[] = [
     { label: m.nav.forDrivers, path: "/drivers" },
@@ -107,13 +112,34 @@ export function SiteHeader({
               {m.lang.toggle}
             </Link>
             <ThemeToggle label={m.theme.toggle} />
-            <ButtonLink
-              href={href(locale, "/contact")}
-              size="md"
-              className="hidden sm:inline-flex"
-            >
-              {m.nav.findRide}
-            </ButtonLink>
+            {status === "loading" ? (
+              <span aria-hidden className="hidden h-11 w-32 sm:inline-block" />
+            ) : signedIn ? (
+              <ButtonLink
+                href={href(locale, "/account")}
+                size="md"
+                className="hidden sm:inline-flex"
+              >
+                <IconUser width={18} height={18} />
+                {a.myAccount}
+              </ButtonLink>
+            ) : (
+              <>
+                <Link
+                  href={href(locale, "/login")}
+                  className="hidden h-10 items-center rounded-full px-3.5 text-sm font-medium text-[var(--ink)] hover:text-brand-600 sm:inline-flex dark:hover:text-brand-300"
+                >
+                  {a.signIn}
+                </Link>
+                <ButtonLink
+                  href={href(locale, "/signup")}
+                  size="md"
+                  className="hidden sm:inline-flex"
+                >
+                  {m.nav.findRide}
+                </ButtonLink>
+              </>
+            )}
 
             <button
               type="button"
@@ -162,16 +188,41 @@ export function SiteHeader({
             ))}
           </nav>
           <div className="mt-4 grid gap-2.5">
-            <ButtonLink href={href(locale, "/contact")} size="lg">
-              {m.nav.findRide}
-            </ButtonLink>
-            <ButtonLink
-              href={href(locale, "/drivers")}
-              variant="secondary"
-              size="lg"
-            >
-              {m.nav.becomeDriver}
-            </ButtonLink>
+            {signedIn ? (
+              <>
+                <ButtonLink href={href(locale, "/account")} size="lg">
+                  <IconUser width={18} height={18} />
+                  {a.myAccount}
+                </ButtonLink>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    void backend.signOut();
+                  }}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[var(--line)] px-7 py-3 text-base font-medium"
+                >
+                  <IconLogout width={18} height={18} />
+                  {a.signOut}
+                </button>
+              </>
+            ) : (
+              <>
+                <ButtonLink href={href(locale, "/signup")} size="lg">
+                  {m.nav.findRide}
+                </ButtonLink>
+                <ButtonLink href={href(locale, "/login")} variant="secondary" size="lg">
+                  {a.signIn}
+                </ButtonLink>
+                <ButtonLink
+                  href={href(locale, "/drivers")}
+                  variant="ghost"
+                  size="lg"
+                >
+                  {m.nav.becomeDriver}
+                </ButtonLink>
+              </>
+            )}
             <Link
               href={`/${other}${swapPath}`}
               hrefLang={other}

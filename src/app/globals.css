@@ -212,3 +212,42 @@
       );
   }
 }
+
+/* ---- Map (Leaflet) ---- */
+.masar-map.leaflet-container {
+  font-family: inherit;
+  background: transparent;
+}
+
+/* Keep the page end clear of the account bottom navigation on phones */
+@media (max-width: 1023px) {
+  body:has(#account-bottom-nav) {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+}
+.masar-pin {
+  background: none;
+  border: 0;
+  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 0.2));
+}
+.masar-map .leaflet-control-attribution {
+  font-size: 10px;
+  background: rgb(255 255 255 / 0.8);
+}
+.dark .masar-map .leaflet-control-attribution {
+  background: rgb(10 20 16 / 0.75);
+  color: #9fb3ab;
+}
+.dark .masar-map .leaflet-control-attribution a {
+  color: #8fd4ba;
+}
+.masar-map .leaflet-bar a {
+  width: 36px;
+  height: 36px;
+  line-height: 36px;
+}
+.dark .masar-map .leaflet-bar a {
+  background: #0f1d18;
+  color: #e9f1ee;
+  border-color: #1e3029;
+}
