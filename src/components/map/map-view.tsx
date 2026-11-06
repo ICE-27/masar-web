@@ -6,12 +6,11 @@
  */
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { useEffect, useMemo, useRef } from "react";
-import { Circle, MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Circle, MapContainer, Marker, useMap, useMapEvents } from "react-leaflet";
+import { BaseLayerTiles, LayerToggle, type BaseLayer } from "./base-layers";
 import type { LatLng } from "@/lib/geo";
 import { DEFAULT_CENTER } from "@/lib/geo";
-
-const TILES = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 // The Masar pin, as a map marker
 const pinIcon = L.divIcon({
@@ -78,8 +77,10 @@ export default function MapView({
   attribution: string;
 }) {
   const initial = useMemo(() => point ?? DEFAULT_CENTER, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [layer, setLayer] = useState<BaseLayer>("map");
   return (
-    <div dir="ltr" className="h-full w-full" role="application" aria-label={label}>
+    <div dir="ltr" className="relative h-full w-full" role="application" aria-label={label}>
+      <LayerToggle value={layer} onChange={setLayer} />
       <MapContainer
         center={[initial.lat, initial.lng]}
         zoom={point ? 17 : 11}
@@ -87,13 +88,7 @@ export default function MapView({
         attributionControl
         zoomControl
       >
-        <TileLayer
-          url={TILES}
-          subdomains="abc"
-          maxZoom={19}
-          attribution={attribution}
-          className={dark ? "masar-dark-tiles" : undefined}
-        />
+        <BaseLayerTiles layer={layer} dark={dark} attribution={attribution} />
         <ClickToPlace onPick={onPick} />
         <FlyTo point={point} focusKey={focusKey} />
         <KeepSized />

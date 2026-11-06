@@ -388,7 +388,7 @@ begin
       from public.bookings b where b.id = i.booking_id),
     'parent', (select jsonb_build_object('name', p.full_name, 'email', (select email from auth.users where id = p.id),
         'phone', p.phone) from public.profiles p where p.id = i.parent_id),
-    'driver', (select jsonb_build_object('nameEn', d.name_en, 'nameAr', d.name_ar) from public.drivers d where d.id = i.driver_id)
+    'driver', (select jsonb_build_object('nameEn', coalesce(d.name_en, d.name_ar), 'nameAr', coalesce(d.name_ar, d.name_en)) from public.drivers d where d.id = i.driver_id)
   );
 end;
 $$;

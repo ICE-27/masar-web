@@ -57,7 +57,7 @@ begin
   insert into public.drivers (id, status, wizard_step, name_ar, name_en, gender, date_of_birth, nationality, city,
     bio, languages, years_experience, id_number, id_expiry, police_issued, licence_number, licence_type, licence_expiry,
     bank_name, iban, account_holder, declaration_at, submitted_at, reviewed_at, approved_at)
-  values (v_id, v_status, 8, p ->> 'nameAr', p ->> 'nameEn', p ->> 'gender', (p ->> 'dob')::date, 'Saudi', p ->> 'city',
+  values (v_id, v_status, 7, p ->> 'nameAr', p ->> 'nameEn', p ->> 'gender', (p ->> 'dob')::date, 'Saudi', p ->> 'city',
     p ->> 'bio', array['ar', 'en'], (p ->> 'years')::smallint, p ->> 'idNumber', public.riyadh_today() + 900,
     public.riyadh_today() - 60, p ->> 'licence', p ->> 'licenceType', public.riyadh_today() + 1200,
     'Al Rajhi Bank', p ->> 'iban', p ->> 'nameEn', now(), now() - interval '20 days',

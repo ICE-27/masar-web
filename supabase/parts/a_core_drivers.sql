@@ -217,11 +217,15 @@ returns boolean language plpgsql immutable set search_path = '' as $$
 declare
   s text; r int := 0; ch text;
 begin
-  if p is null or p !~ '^SA[0-9]{22}$' then return false; end if;
-  s := substr(p, 5) || '2810' || substr(p, 3, 2);   -- S=28, A=10
+  if p is null or p !~ '^SA[0-9]{4}[0-9A-Z]{18}$' then return false; end if;
+  s := substr(p, 5) || 'SA' || substr(p, 3, 2);
   for i in 1 .. length(s) loop
     ch := substr(s, i, 1);
-    r := (r * 10 + ch::int) % 97;
+    if ch ~ '[0-9]' then
+      r := (r * 10 + ch::int) % 97;
+    else  -- letters count as two digits: A=10 .. Z=35
+      r := (r * 100 + ascii(ch) - 55) % 97;
+    end if;
   end loop;
   return r = 1;
 end;
@@ -316,7 +320,7 @@ create table if not exists public.drivers (
   licence_type      text check (licence_type in ('private', 'public', 'heavy')),
   licence_expiry    date,
   bank_name         text check (char_length(bank_name) <= 80),
-  iban              text check (iban ~ '^SA[0-9]{22}$'),
+  iban              text,
   account_holder    text check (char_length(account_holder) <= 120),
   discount_t1_pct   smallint not null default 5 check (discount_t1_pct between 0 and 50),
   discount_t2_pct   smallint not null default 10 check (discount_t2_pct between 0 and 50),
@@ -328,6 +332,11 @@ create table if not exists public.drivers (
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
+-- Columns added after the first release
+alter table public.drivers add column if not exists id_issued date;
+alter table public.drivers drop constraint if exists drivers_iban_check;
+alter table public.drivers add constraint drivers_iban_check check (iban ~ '^SA[0-9]{4}[0-9A-Z]{18}$');
+
 drop trigger if exists drivers_touch on public.drivers;
 create trigger drivers_touch before update on public.drivers for each row execute function public.touch_updated_at();
 
@@ -356,6 +365,8 @@ create table if not exists public.vehicles (
 );
 create unique index if not exists vehicles_plate_key on public.vehicles (plate_digits, plate_letters)
   where plate_digits is not null and plate_letters is not null;
+alter table public.vehicles add column if not exists other_features text check (char_length(other_features) <= 200);
+
 drop trigger if exists vehicles_touch on public.vehicles;
 create trigger vehicles_touch before update on public.vehicles for each row execute function public.touch_updated_at();
 
@@ -496,7 +507,7 @@ create policy "masar docs: owner or admin reads" on storage.objects for select t
 
 create or replace function public.required_doc_kinds(p_vehicle_type text)
 returns text[] language sql immutable set search_path = '' as $$
-  select array['profile_photo', 'id_front', 'id_back', 'selfie', 'police', 'licence',
+  select array['profile_photo', 'id_front', 'police', 'licence',
                'istimara', 'insurance', 'fahas', 'car_front', 'car_back', 'car_side', 'car_interior']
          || case when p_vehicle_type = 'bus' then array['tga_card', 'first_aid'] else array[]::text[] end
 $$;
@@ -509,7 +520,7 @@ returns jsonb language sql stable security definer set search_path = '' as $$
         'nameAr', d.name_ar, 'nameEn', d.name_en, 'gender', d.gender, 'dateOfBirth', d.date_of_birth,
         'nationality', d.nationality, 'city', d.city, 'bio', d.bio, 'languages', to_jsonb(d.languages),
         'yearsExperience', d.years_experience,
-        'idNumber', d.id_number, 'idExpiry', d.id_expiry, 'policeIssued', d.police_issued,
+        'idNumber', d.id_number, 'idIssued', d.id_issued, 'idExpiry', d.id_expiry, 'policeIssued', d.police_issued,
         'licenceNumber', d.licence_number, 'licenceType', d.licence_type, 'licenceExpiry', d.licence_expiry,
         'bankName', d.bank_name, 'iban', d.iban, 'accountHolder', d.account_holder,
         'discountT1Pct', d.discount_t1_pct, 'discountT2Pct', d.discount_t2_pct,
@@ -523,7 +534,7 @@ returns jsonb language sql stable security definer set search_path = '' as $$
         'type', v.type, 'make', v.make, 'model', v.model, 'year', v.year, 'color', v.color, 'seats', v.seats,
         'carCategory', v.car_category, 'busType', v.bus_type, 'ac', v.ac, 'gps', v.gps, 'cameras', v.cameras,
         'seatbelts', v.seatbelts, 'femaleAttendant', v.female_attendant, 'wheelchair', v.wheelchair,
-        'plateDigits', v.plate_digits, 'plateLetters', v.plate_letters)
+        'plateDigits', v.plate_digits, 'plateLetters', v.plate_letters, 'otherFeatures', v.other_features)
       from public.vehicles v where v.driver_id = p_driver),
     'documents', coalesce((select jsonb_agg(jsonb_build_object(
         'id', x.id, 'kind', x.kind, 'bucket', x.bucket, 'path', x.path, 'expiry', x.expiry,
@@ -598,7 +609,7 @@ begin
       languages = coalesce((select array_agg(x) from jsonb_array_elements_text(s -> 'languages') x), '{ar}'),
       years_experience = (s ->> 'yearsExperience')::smallint
     where id = uid;
-    update public.profiles set full_name = coalesce(nullif(trim(s ->> 'nameEn'), ''), full_name) where id = uid;
+    update public.profiles set full_name = coalesce(nullif(trim(s ->> 'nameEn'), ''), nullif(trim(s ->> 'nameAr'), ''), full_name) where id = uid;
   end if;
 
   if p ? 'identity' and v_editable then
@@ -606,11 +617,14 @@ begin
     if (s ->> 'idExpiry')::date <= public.riyadh_today() then
       raise exception 'document_expired' using errcode = 'P0001', detail = 'id';
     end if;
+    if (s ->> 'idIssued')::date > public.riyadh_today() then
+      raise exception 'bad_issue_date' using errcode = 'P0001';
+    end if;
     if (s ->> 'policeIssued')::date < public.riyadh_today() - 365 or (s ->> 'policeIssued')::date > public.riyadh_today() then
       raise exception 'police_too_old' using errcode = 'P0001';
     end if;
-    update public.drivers set id_number = s ->> 'idNumber', id_expiry = (s ->> 'idExpiry')::date,
-      police_issued = (s ->> 'policeIssued')::date where id = uid;
+    update public.drivers set id_number = nullif(s ->> 'idNumber', ''), id_issued = (s ->> 'idIssued')::date,
+      id_expiry = (s ->> 'idExpiry')::date, police_issued = (s ->> 'policeIssued')::date where id = uid;
   end if;
 
   if p ? 'licence' and v_editable then
@@ -618,11 +632,11 @@ begin
     if (s ->> 'licenceExpiry')::date <= public.riyadh_today() then
       raise exception 'document_expired' using errcode = 'P0001', detail = 'licence';
     end if;
-    update public.drivers set licence_number = s ->> 'licenceNumber', licence_type = s ->> 'licenceType',
+    update public.drivers set licence_number = nullif(s ->> 'licenceNumber', ''), licence_type = s ->> 'licenceType',
       licence_expiry = (s ->> 'licenceExpiry')::date where id = uid;
   end if;
 
-  if p ? 'vehicle' and v_editable then
+  if p ? 'vehicle' and v_editable and nullif(p -> 'vehicle' ->> 'type', '') is not null then
     s := p -> 'vehicle';
     v_type := s ->> 'type';
     if (s ->> 'year')::int < v_year - public.setting_num('max_vehicle_age', 10) then
@@ -633,7 +647,7 @@ begin
       raise exception 'plate_taken' using errcode = 'P0001';
     end if;
     insert into public.vehicles (driver_id, type, make, model, year, color, seats, car_category, bus_type,
-      ac, gps, cameras, seatbelts, female_attendant, wheelchair, plate_digits, plate_letters)
+      ac, gps, cameras, seatbelts, female_attendant, wheelchair, plate_digits, plate_letters, other_features)
     values (uid, v_type, s ->> 'make', s ->> 'model', (s ->> 'year')::smallint, s ->> 'color',
       (s ->> 'seats')::smallint,
       case when v_type = 'car' then s ->> 'carCategory' end,
@@ -641,8 +655,8 @@ begin
       coalesce((s ->> 'ac')::boolean, true), coalesce((s ->> 'gps')::boolean, false),
       coalesce((s ->> 'cameras')::boolean, false), coalesce((s ->> 'seatbelts')::boolean, true),
       coalesce((s ->> 'femaleAttendant')::boolean, false), coalesce((s ->> 'wheelchair')::boolean, false),
-      s ->> 'plateDigits', s ->> 'plateLetters')
-    on conflict (driver_id) do update set type = excluded.type, make = excluded.make, model = excluded.model,
+      nullif(s ->> 'plateDigits', ''), nullif(s ->> 'plateLetters', ''), nullif(trim(s ->> 'otherFeatures'), ''))
+    on conflict (driver_id) do update set other_features = excluded.other_features, type = excluded.type, make = excluded.make, model = excluded.model,
       year = excluded.year, color = excluded.color, seats = excluded.seats, car_category = excluded.car_category,
       bus_type = excluded.bus_type, ac = excluded.ac, gps = excluded.gps, cameras = excluded.cameras,
       seatbelts = excluded.seatbelts, female_attendant = excluded.female_attendant,
@@ -677,11 +691,11 @@ begin
 
   if p ? 'payout' then
     s := p -> 'payout';
-    if not public.iban_valid(upper(replace(s ->> 'iban', ' ', ''))) then
+    if nullif(s ->> 'iban', '') is not null and not public.iban_valid(upper(replace(s ->> 'iban', ' ', ''))) then
       raise exception 'iban_invalid' using errcode = 'P0001';
     end if;
     update public.drivers set bank_name = nullif(trim(s ->> 'bankName'), ''),
-      iban = upper(replace(s ->> 'iban', ' ', '')), account_holder = nullif(trim(s ->> 'accountHolder'), '')
+      iban = nullif(upper(replace(s ->> 'iban', ' ', '')), ''), account_holder = nullif(trim(s ->> 'accountHolder'), '')
     where id = uid;
   end if;
 
@@ -695,7 +709,7 @@ begin
   end if;
 
   if p ? 'step' then
-    update public.drivers set wizard_step = greatest(wizard_step, least(8, (p ->> 'step')::smallint)) where id = uid;
+    update public.drivers set wizard_step = greatest(wizard_step, least(7, (p ->> 'step')::smallint)) where id = uid;
   end if;
 
   return public.driver_bundle(uid);
@@ -747,7 +761,7 @@ begin
 
   missing := array[]::text[];
   if v_ph.phone_verified_at is null then missing := array_append(missing, 'phone'); end if;
-  if d.name_ar is null or d.name_en is null or d.gender is null or d.date_of_birth is null or d.city is null then
+  if coalesce(d.name_ar, d.name_en) is null or d.gender is null or d.date_of_birth is null or d.city is null then
     missing := array_append(missing, 'personal'); end if;
   if d.id_number is null or d.id_expiry is null or d.police_issued is null then missing := array_append(missing, 'identity'); end if;
   if d.licence_number is null or d.licence_type is null or d.licence_expiry is null then missing := array_append(missing, 'licence'); end if;
@@ -772,7 +786,7 @@ begin
     raise exception 'female_bus_not_allowed' using errcode = 'P0001';
   end if;
 
-  update public.drivers set status = 'submitted', submitted_at = now(), declaration_at = now(), wizard_step = 8
+  update public.drivers set status = 'submitted', submitted_at = now(), declaration_at = now(), wizard_step = 7
   where id = uid;
   perform public.notify_admins('driver_submitted', jsonb_build_object('name', coalesce(d.name_en, d.name_ar)),
     '/admin/drivers?id=' || uid);

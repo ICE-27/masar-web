@@ -5,7 +5,8 @@ import { pathProject, resolveDistrict, type District } from "@/lib/domain/geo";
 import { matchService, type MatchService } from "@/lib/domain/match";
 import { formatSar, parseSar } from "@/lib/domain/money";
 import { calcPrice, quoteFor, type PriceRow } from "@/lib/domain/pricing";
-import { bankFromIban, ibanValid, normalizePlateLetters, plateLettersAr, validPlate } from "@/lib/domain/vehicle";
+import { bankFromIban, busTypeFor, carCategoryFor, ibanValid, normalizeIban, normalizePlateLetters, plateLettersAr, validPlate } from "@/lib/domain/vehicle";
+import { parseCoordinates } from "@/lib/geo";
 
 describe("the Masar money model", () => {
   it("matches the brief's worked example exactly", () => {
@@ -107,6 +108,15 @@ const D: District[] = [
   { id: "khb-thuqbah", city: "Khobar", nameEn: "Ath Thuqbah", nameAr: "الثقبة", lat: 26.285, lng: 50.178 },
 ];
 
+describe("pasted locations", () => {
+  it("reads coordinates and Google Maps links", () => {
+    expect(parseCoordinates("26.2921, 50.1953")).toEqual({ lat: 26.2921, lng: 50.1953 });
+    expect(parseCoordinates("https://www.google.com/maps/place/X/@26.30123,50.19876,17z")).toEqual({ lat: 26.30123, lng: 50.19876 });
+    expect(parseCoordinates("https://maps.google.com/?q=26.4,50.1")).toEqual({ lat: 26.4, lng: 50.1 });
+    expect(parseCoordinates("Al Khobar")).toBeNull();
+  });
+});
+
 describe("route geometry and districts", () => {
   it("measures the distance from a home to a path (same maths as the database)", () => {
     const path: [number, number][] = [[26.285, 50.2], [26.293, 50.195], [26.285, 50.178]];
@@ -179,6 +189,19 @@ describe("plates, IBANs and cards", () => {
     expect(ibanValid("SA03 8000 0000 6080 1016 7519")).toBe(true);
     expect(ibanValid("SA0380000000608010167518")).toBe(false);
     expect(bankFromIban("SA0380000000608010167519")?.en).toBe("Al Rajhi Bank");
+  });
+  it("cleans pasted IBANs: a second SA, dashes, Arabic digits, or no SA at all", () => {
+    expect(normalizeIban("SASA03 8000 0000 6080 1016 7519")).toBe("SA0380000000608010167519");
+    expect(ibanValid("SA" + "SA03-8000-0000-6080-1016-7519")).toBe(true);
+    expect(ibanValid("sa03 ٨٠٠٠ 0000 6080 1016 7519")).toBe(true);
+    expect(ibanValid("0380000000608010167519")).toBe(true);
+  });
+  it("knows a car's category from its model and a bus's size from its seats", () => {
+    expect(carCategoryFor("Land Cruiser")).toBe("suv");
+    expect(carCategoryFor("Carnival")).toBe("van");
+    expect(carCategoryFor("Camry")).toBe("sedan");
+    expect(busTypeFor(14)).toBe("minivan");
+    expect(busTypeFor(26)).toBe("coaster");
   });
   it("accepts only Luhn-valid numbers and every demo card is valid", () => {
     for (const c of DEMO_CARDS) expect(luhnValid(c.number)).toBe(true);

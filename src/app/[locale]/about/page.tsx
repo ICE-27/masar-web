@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
-import { ButtonLink, Card, Section, SectionHead } from "@/components/ui";
+import { ButtonLink, Section } from "@/components/ui";
 import { getMessages, href, isLocale, locales } from "@/lib/i18n";
 
 export function generateStaticParams() {

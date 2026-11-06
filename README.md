@@ -81,9 +81,9 @@ geocoding. No API key and no cost. The provider sits behind one interface in
 
 ## Milestones 3 to 6 — drivers, services, booking and payments
 
-**Milestone 3 — driver onboarding and verification.** `/driver/join` is an
-8-step application (account and mobile, identity, licence, vehicle, prices,
-payout IBAN, working hours, review). Documents go to a **private** storage
+**Milestone 3 — driver onboarding and verification.** `/driver/join` is a
+7-step application (account and mobile, identity, licence and vehicle, prices,
+payout IBAN, working hours, review), with "save and continue later". Documents go to a **private** storage
 bucket and are shown to admins only through short-lived signed links. Admins
 review each document in `/admin/drivers` and approve, ask for changes or
 suspend. The driver is notified at every step.
@@ -298,7 +298,7 @@ touch targets, and `prefers-reduced-motion` respected.
    mada `4464 0400 0000 0007`; enter the code shown in the 3-D Secure box.
    Open the receipt, then **Wallet**.
 4. **Cancel** the booking: the preview shows what is refunded and what is kept.
-5. **New driver:** sign out → `/driver/join` → complete the 8 steps (any
+5. **New driver:** sign out → `/driver/join` → complete the 7 steps (any
    image works as a document) → **Submit**.
 6. **Admin:** `admin@ksamasar.com` → **Drivers** → approve each document →
    **Approve driver**. The new driver can now publish a service.

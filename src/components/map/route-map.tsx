@@ -6,11 +6,10 @@
  */
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { useEffect, useMemo } from "react";
-import { Circle, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Circle, MapContainer, Marker, Polyline, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { BaseLayerTiles, LayerToggle, type BaseLayer } from "./base-layers";
 import { DEFAULT_CENTER, type LatLng } from "@/lib/geo";
-
-const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 export interface MapRoute {
   id: string;
@@ -66,12 +65,26 @@ function Fit({ points, padding = 32, fitKey }: { points: [number, number][]; pad
   useEffect(() => {
     if (!points.length) return;
     if (points.length === 1) {
-      map.setView(points[0], 14);
+      map.setView(points[0], 14, { animate: false });
       return;
     }
-    map.fitBounds(L.latLngBounds(points), { padding: [padding, padding], maxZoom: 15 });
+    map.fitBounds(L.latLngBounds(points), { padding: [padding, padding], maxZoom: 15, animate: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey, map]);
+  return null;
+}
+
+/** Fly to a point (a search result) whenever its key changes. */
+function FlyTo({ focus }: { focus?: { lat: number; lng: number; key: number } | null }) {
+  const map = useMap();
+  const last = useRef(focus?.key ?? 0);
+  useEffect(() => {
+    if (!focus || focus.key === last.current) return;
+    last.current = focus.key;
+    map.flyTo([focus.lat, focus.lng], Math.max(map.getZoom(), 16), { duration: 0.8 });
+  }, [focus, map]);
+  // Stop any animation when the map goes away (Leaflet would otherwise touch removed panes)
+  useEffect(() => () => void map.stop(), [map]);
   return null;
 }
 
@@ -105,6 +118,7 @@ export default function RouteMap({
   attribution,
   className = "h-72",
   center,
+  focus,
 }: {
   routes?: MapRoute[];
   markers?: MapMarker[];
@@ -116,16 +130,20 @@ export default function RouteMap({
   attribution: string;
   className?: string;
   center?: LatLng | null;
+  focus?: { lat: number; lng: number; key: number } | null;
 }) {
+  const [layer, setLayer] = useState<BaseLayer>("map");
   const points = useMemo<[number, number][]>(
     () => [...routes.flatMap((r) => r.path), ...markers.map((m) => [m.lat, m.lng] as [number, number])],
     [routes, markers],
   );
   const c = center ?? DEFAULT_CENTER;
   return (
-    <div dir="ltr" className={className} role="application" aria-label={label}>
+    <div dir="ltr" className={`relative ${className}`} role="application" aria-label={label}>
+      <LayerToggle value={layer} onChange={setLayer} />
       <MapContainer center={[c.lat, c.lng]} zoom={12} className="masar-map h-full w-full" attributionControl zoomControl>
-        <TileLayer url={TILES} maxZoom={19} attribution={attribution} className={dark ? "masar-dark-tiles" : undefined} />
+        <BaseLayerTiles layer={layer} dark={dark} attribution={attribution} />
+        <FlyTo focus={focus} />
         <KeepSized />
         <Fit points={points} fitKey={fitKey} />
         <Clicks onClick={onMapClick} />

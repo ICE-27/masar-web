@@ -5,7 +5,7 @@ export function docLabel(m: AppMessages, kind: DocKind): string {
   const D = m.ops.dw;
   const map: Record<DocKind, string> = {
     profile_photo: D.account.photo,
-    id_front: D.identity.idFront,
+    id_front: D.identity.idImage,
     id_back: D.identity.idBack,
     selfie: D.identity.selfie,
     police: D.identity.police,
@@ -23,14 +23,14 @@ export function docLabel(m: AppMessages, kind: DocKind): string {
   return map[kind];
 }
 
-export type WizardSection = "account" | "identity" | "licence" | "vehicle" | "pricing" | "payout" | "hours" | "review";
-export const SECTIONS: WizardSection[] = ["account", "identity", "licence", "vehicle", "pricing", "payout", "hours", "review"];
+export type WizardSection = "account" | "identity" | "vehicle" | "pricing" | "payout" | "hours" | "review";
+/** The 7 steps of the driver application (the licence is asked with the vehicle, since the vehicle decides its type). */
+export const SECTIONS: WizardSection[] = ["account", "identity", "vehicle", "pricing", "payout", "hours", "review"];
 
 export const SECTION_DOCS: Partial<Record<WizardSection, DocKind[]>> = {
   account: ["profile_photo"],
-  identity: ["id_front", "id_back", "selfie", "police"],
-  licence: ["licence"],
-  vehicle: ["istimara", "insurance", "fahas", "tga_card", "first_aid", "car_front", "car_back", "car_side", "car_interior"],
+  identity: ["id_front", "police"],
+  vehicle: ["licence", "istimara", "insurance", "fahas", "tga_card", "first_aid", "car_front", "car_back", "car_side", "car_interior"],
 };
 
 /** What is still missing, section by section (mirrors public.driver_submit). */
@@ -45,10 +45,9 @@ export function missingSections(app: DriverApplication): { section: WizardSectio
     const docs = docsFor(section);
     if (fieldsMissing || docs.length) out.push({ section, docs });
   };
-  push("account", !d.phoneVerified || !d.nameAr || !d.nameEn || !d.gender || !d.dateOfBirth || !d.city);
+  push("account", !d.phoneVerified || !(d.nameAr || d.nameEn) || !d.gender || !d.dateOfBirth || !d.city);
   push("identity", !d.idNumber || !d.idExpiry || !d.policeIssued);
-  push("licence", !d.licenceNumber || !d.licenceType || !d.licenceExpiry);
-  push("vehicle", !v || !v.seats || !v.plateDigits || !v.plateLetters || !v.make);
+  push("vehicle", !d.licenceNumber || !d.licenceType || !d.licenceExpiry || !v || !v.seats || !v.plateDigits || !v.plateLetters || !v.make);
   if (!app.pricing.some((p) => p.enabled)) out.push({ section: "pricing", docs: [] });
   if (!d.iban || !d.accountHolder) out.push({ section: "payout", docs: [] });
   if (!app.hours.length && !app.futureHours.length) out.push({ section: "hours", docs: [] });
@@ -66,8 +65,13 @@ export const CITIES = ["Dammam", "Khobar", "Dhahran", "Qatif", "Jubail", "Al Ahs
 export const CITIES_AR: Record<string, string> = {
   Dammam: "الدمام", Khobar: "الخبر", Dhahran: "الظهران", Qatif: "القطيف", Jubail: "الجبيل", "Al Ahsa": "الأحساء",
 };
-export const COLORS = ["White", "Silver", "Grey", "Black", "Pearl", "Blue", "Red", "Gold", "Beige", "Yellow", "Green", "Brown"];
+export const COLORS = [
+  "White", "Pearl", "Silver", "Grey", "Black", "Blue", "Navy", "Sky blue", "Red", "Maroon", "Orange", "Yellow",
+  "Gold", "Champagne", "Beige", "Bronze", "Brown", "Green", "Olive", "Purple", "Other",
+];
 export const COLORS_AR: Record<string, string> = {
-  White: "أبيض", Silver: "فضي", Grey: "رمادي", Black: "أسود", Pearl: "لؤلؤي", Blue: "أزرق", Red: "أحمر",
-  Gold: "ذهبي", Beige: "بيج", Yellow: "أصفر", Green: "أخضر", Brown: "بني",
+  White: "أبيض", Pearl: "لؤلؤي", Silver: "فضي", Grey: "رمادي", Black: "أسود", Blue: "أزرق", Navy: "كحلي",
+  "Sky blue": "سماوي", Red: "أحمر", Maroon: "عنابي", Orange: "برتقالي", Yellow: "أصفر", Gold: "ذهبي",
+  Champagne: "شمباني", Beige: "بيج", Bronze: "برونزي", Brown: "بني", Green: "أخضر", Olive: "زيتي",
+  Purple: "بنفسجي", Other: "أخرى",
 };

@@ -80,8 +80,8 @@ create or replace function public.driver_public(p_driver uuid)
 returns jsonb language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'id', d.id,
-    'firstNameEn', split_part(coalesce(d.name_en, ''), ' ', 1),
-    'firstNameAr', split_part(coalesce(d.name_ar, ''), ' ', 1),
+    'firstNameEn', split_part(coalesce(d.name_en, d.name_ar, ''), ' ', 1),
+    'firstNameAr', split_part(coalesce(d.name_ar, d.name_en, ''), ' ', 1),
     'gender', d.gender, 'city', d.city, 'languages', to_jsonb(d.languages), 'bio', d.bio,
     'yearsExperience', d.years_experience, 'memberSince', d.approved_at,
     'photo', (select case when x.bucket = 'demo' then x.path else x.bucket || '/' || x.path end
@@ -489,7 +489,7 @@ returns jsonb language sql stable security definer set search_path = '' as $$
           from public.service_version_on(s.id, b.first_date) v))
       from public.services s where s.id = b.service_id),
     'driver', (select jsonb_build_object('id', dr.id,
-        'firstNameEn', split_part(coalesce(dr.name_en, ''), ' ', 1), 'firstNameAr', split_part(coalesce(dr.name_ar, ''), ' ', 1),
+        'firstNameEn', split_part(coalesce(dr.name_en, dr.name_ar, ''), ' ', 1), 'firstNameAr', split_part(coalesce(dr.name_ar, dr.name_en, ''), ' ', 1),
         'gender', dr.gender,
         'photo', (select case when x.bucket = 'demo' then x.path else x.bucket || '/' || x.path end
                     from public.driver_documents x where x.driver_id = dr.id and x.kind = 'profile_photo'),
@@ -562,8 +562,8 @@ returns jsonb language sql stable security definer set search_path = '' as $$
     'serviceName', (select name from public.services where id = b.service_id),
     'destination', (select jsonb_build_object('nameEn', d.name_en, 'nameAr', d.name_ar)
                       from public.services s join public.destinations d on d.id = s.destination_id where s.id = b.service_id),
-    'driver', (select jsonb_build_object('firstNameEn', split_part(coalesce(dr.name_en, ''), ' ', 1),
-                 'firstNameAr', split_part(coalesce(dr.name_ar, ''), ' ', 1), 'gender', dr.gender,
+    'driver', (select jsonb_build_object('firstNameEn', split_part(coalesce(dr.name_en, dr.name_ar, ''), ' ', 1),
+                 'firstNameAr', split_part(coalesce(dr.name_ar, dr.name_en, ''), ' ', 1), 'gender', dr.gender,
                  'vehicleType', (select type from public.vehicles where driver_id = dr.id))
                from public.drivers dr where dr.id = b.driver_id),
     'parentFirstName', (select split_part(coalesce(full_name, ''), ' ', 1) from public.profiles where id = b.parent_id),
@@ -640,8 +640,8 @@ begin
   update public.bookings set status = 'accepted', payment_due_at = v_due, responded_at = now() where id = b.id;
   perform public.notify(b.parent_id, 'booking_accepted',
     jsonb_build_object('code', b.code, 'totalH', b.total_h, 'dueAt', v_due,
-      'driver', (select split_part(coalesce(name_en, ''), ' ', 1) from public.drivers where id = uid),
-      'driverAr', (select split_part(coalesce(name_ar, ''), ' ', 1) from public.drivers where id = uid)),
+      'driver', (select split_part(coalesce(name_en, name_ar, ''), ' ', 1) from public.drivers where id = uid),
+      'driverAr', (select split_part(coalesce(name_ar, name_en, ''), ' ', 1) from public.drivers where id = uid)),
     '/checkout?booking=' || b.id);
   return public.booking_json(b.id, 'driver');
 end;

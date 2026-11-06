@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Alert, Skeleton } from "@/components/form";
 import { IconChevron, IconDownload } from "@/components/icons";

@@ -1,24 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Alert, Choice, Dialog, Field, Input, Select, SubmitButton } from "@/components/form";
-import { IconChevron, IconPlus, IconRoute, IconSpinner, IconTrash } from "@/components/icons";
+import { IconChevron, IconPin, IconPlus, IconRoute, IconSpinner, IconTrash } from "@/components/icons";
+import { PlaceSearch } from "@/components/map/place-search";
 import { RouteMap, useIsDark, type MapCircle, type MapMarker } from "@/components/map/route-map-lazy";
 import { EmptyState, ErrorNote, LoadingBlocks, PageTitle, Panel, StatusBadge, Switch, SwitchRow, useLoad } from "@/components/ops/bits";
 import { cn } from "@/components/ui";
-import type { DestinationGeo, DriverApplication, ServiceInput, ServiceRecord, Stop } from "@/lib/data";
+import type { DriverApplication, ServiceInput, ServiceRecord, Stop } from "@/lib/data";
 import { formatTime, parseTime, timeInput, weekdayNames } from "@/lib/domain/dates";
 import { pathLengthM, pathProject, type District, type Path } from "@/lib/domain/geo";
-import { formatSar, parseSar, sarInput } from "@/lib/domain/money";
+import { parseSar, sarInput } from "@/lib/domain/money";
 import { errorText, num, t } from "@/lib/format";
-import { osmGeocoder, type LatLng, type PlaceResult } from "@/lib/geo";
+import type { LatLng, PlaceResult } from "@/lib/geo";
 import { href, type Locale } from "@/lib/i18n";
 import type { AppMessages } from "@/lib/messages/app.en";
 import { useQueryParam, useNavigate } from "@/lib/nav";
 import { ConflictDialog, conflictFrom } from "./conflict-dialog";
-import { PriceEditor, initialPriceForms, priceFormsToRows } from "./driver-wizard";
-import { CITIES, CITIES_AR } from "./labels";
+import { DiscountFields, PriceEditor, initialPriceForms, priceFormsToRows } from "./driver-wizard";
+import { CITIES_AR } from "./labels";
 import type { ConflictReport } from "@/lib/data";
 
 /* ---- List ----------------------------------------------------------------- */
@@ -116,7 +117,36 @@ export function ServicesSection({ m, locale }: { m: AppMessages; locale: Locale 
 
 /* ---- Editor --------------------------------------------------------------- */
 
-type Mode = "start" | "stop" | null;
+type Mode = "start" | "stop" | "dest" | null;
+type Reach = "same" | "near";
+
+/** Matching limits behind the two simple choices. */
+const REACH_LIMITS: Record<Reach, ServiceInput["limits"]> = {
+  same: { maxPickupM: 1000, maxDetourM: 2500, maxDetourPct: 20, maxStops: 12, maxJourneyMin: 60 },
+  near: { maxPickupM: 3000, maxDetourM: 5000, maxDetourPct: 30, maxStops: 15, maxJourneyMin: 75 },
+};
+
+/** Rough centres of the launch cities, to file a new destination under the nearest one. */
+const CITY_CENTRES: Record<string, LatLng> = {
+  Dammam: { lat: 26.4207, lng: 50.0888 },
+  Khobar: { lat: 26.2794, lng: 50.2083 },
+  Dhahran: { lat: 26.2886, lng: 50.1137 },
+  Qatif: { lat: 26.5196, lng: 50.0115 },
+  Jubail: { lat: 27.0046, lng: 49.646 },
+  "Al Ahsa": { lat: 25.383, lng: 49.5868 },
+};
+function nearestCity(p: LatLng): string {
+  let best = "Khobar";
+  let bestD = Infinity;
+  for (const [c, q] of Object.entries(CITY_CENTRES)) {
+    const d = (q.lat - p.lat) ** 2 + (q.lng - p.lng) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
+}
 
 async function roadRoute(points: LatLng[], signal: AbortSignal): Promise<{ path: Path; distanceM: number; durationS: number }> {
   const coords = points.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(";");
@@ -137,19 +167,18 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
   const dests = useLoad(() => backend.listDestinationsGeo(), [backend]);
   const districts = useLoad(() => backend.listDistricts(), [backend]);
   const existing = useLoad<ServiceRecord | null>(() => (id ? backend.driverService(id) : Promise.resolve(null)), [backend, id]);
-
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<ServiceRecord["kind"]>("school");
+  const [kind, setKind] = useState<"school" | "activity">("school");
   const [destId, setDestId] = useState("");
+  const [custom, setCustom] = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [start, setStart] = useState<LatLng | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
   const [road, setRoad] = useState<{ path: Path; distanceM: number; durationS: number } | null>(null);
   const [routing, setRouting] = useState(false);
   const [routeFailed, setRouteFailed] = useState(false);
   const [mode, setMode] = useState<Mode>(null);
-  const [accepts, setAccepts] = useState<ServiceRecord["accepts"]>("both");
-  const [ageMin, setAgeMin] = useState(4);
-  const [ageMax, setAgeMax] = useState(17);
+  const [focus, setFocus] = useState<{ lat: number; lng: number; key: number } | null>(null);
+  const [accepts, setAccepts] = useState<"boys" | "girls" | "">(app.driver.gender === "female" ? "girls" : "");
   const [maxKids, setMaxKids] = useState(4);
   const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4]);
   const [outbound, setOutbound] = useState(true);
@@ -166,13 +195,13 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
   const [forms, setForms] = useState(() => initialPriceForms(vehicle.type, app.pricing));
   const [t1, setT1] = useState(app.driver.discountT1Pct);
   const [t2, setT2] = useState(app.driver.discountT2Pct);
-  const [limits, setLimits] = useState({ maxPickupM: 2000, maxDetourM: 3000, maxDetourPct: 15, maxStops: 10, maxJourneyMin: 45 });
+  const [reach, setReach] = useState<Reach>("same");
   const [active, setActive] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<ConflictReport | null>(null);
-  const [addingDest, setAddingDest] = useState(false);
   const loaded = useRef(false);
+  const mapRef = useRef<HTMLDivElement>(null);
 
   // Fill the form from an existing service
   useEffect(() => {
@@ -180,14 +209,12 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
     if (!s || loaded.current) return;
     loaded.current = true;
     setName(s.name);
-    setKind(s.kind);
+    setKind(s.kind === "activity" ? "activity" : "school");
     setDestId(s.destination.id);
     setStart(s.start);
     setStops(s.stops ?? []);
     setRoad(s.path.length > 2 + (s.stops?.length ?? 0) ? { path: s.path, distanceM: s.distanceM ?? 0, durationS: s.durationS ?? 0 } : null);
-    setAccepts(s.accepts);
-    setAgeMin(s.ageMin);
-    setAgeMax(s.ageMax);
+    setAccepts(s.accepts === "boys" || s.accepts === "girls" ? s.accepts : "");
     setMaxKids(s.maxChildrenPerFamily);
     if (s.schedule) {
       setDays(s.schedule.days);
@@ -206,14 +233,20 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
     setForms(initialPriceForms(vehicle.type, s.pricing.map((p) => ({ ...p, enabled: true }))));
     setT1(s.discounts.t1Pct);
     setT2(s.discounts.t2Pct);
-    setLimits(s.limits);
+    setReach(s.limits.maxPickupM <= 1500 ? "same" : "near");
     setActive(s.status === "active");
   }, [existing.data, vehicle.type]);
 
-  const dest = (dests.data ?? []).find((d) => d.id === destId) ?? null;
+  const known = (dests.data ?? []).find((d) => d.id === destId) ?? null;
+  const dest: { lat: number; lng: number; name: string } | null =
+    known?.lat != null && known.lng != null
+      ? { lat: known.lat, lng: known.lng, name: locale === "ar" ? known.nameAr : known.nameEn }
+      : custom
+        ? { lat: custom.lat, lng: custom.lng, name: custom.name }
+        : null;
   const points = useMemo<LatLng[]>(
-    () => [...(start ? [start] : []), ...stops, ...(dest?.lat != null && dest.lng != null ? [{ lat: dest.lat, lng: dest.lng }] : [])],
-    [start, stops, dest],
+    () => [...(start ? [start] : []), ...stops, ...(dest ? [{ lat: dest.lat, lng: dest.lng }] : [])],
+    [start, stops, dest?.lat, dest?.lng], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const straight: Path = points.map((p) => [p.lat, p.lng]);
   const path: Path = road?.path ?? straight;
@@ -262,27 +295,41 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [districts.data, path.length, path[0]?.[0], path[path.length - 1]?.[0], coverage]);
 
-  // New service: pre-tick districts within the pickup limit
-  const autoTicked = useRef(false);
+  // Tick the districts that match the pick-up choice (new services, or when the choice changes)
+  const tickedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (id || autoTicked.current || !nearDistricts.length || points.length < 2) return;
-    autoTicked.current = true;
-    setCoverage(Object.fromEntries(nearDistricts.filter((d) => d.d <= limits.maxPickupM).map((d) => [d.id, "0"])));
-  }, [id, nearDistricts, points.length, limits.maxPickupM]);
+    if (!nearDistricts.length || points.length < 2) return;
+    const key = `${reach}|${pointsKey}`;
+    if (tickedFor.current === key) return;
+    const first = tickedFor.current === null;
+    tickedFor.current = key;
+    if (first && id) return; // keep a saved service's areas as they are
+    const limit = REACH_LIMITS[reach].maxPickupM;
+    setCoverage((c) =>
+      Object.fromEntries(nearDistricts.filter((d) => d.d <= limit + 500).map((d) => [d.id, c[d.id] ?? "0"])),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reach, nearDistricts, pointsKey]);
 
-  function onMapClick(p: LatLng) {
+  function place(p: LatLng, label?: string) {
     if (mode === "start") {
       setStart(p);
       setMode(null);
     } else if (mode === "stop") {
-      setStops((s) => [...s, { lat: p.lat, lng: p.lng }]);
+      setStops((s) => [...s, { lat: p.lat, lng: p.lng, ...(label ? { label } : {}) }]);
+    } else if (mode === "dest") {
+      setDestId("");
+      setCustom((c) => ({ name: label ?? c?.name ?? "", lat: p.lat, lng: p.lng }));
+      setMode(null);
     }
   }
 
   const markers: MapMarker[] = [
     ...(start ? [{ id: "start", lat: start.lat, lng: start.lng, kind: "start" as const, label: S.start, draggable: true, onDrag: (p: LatLng) => setStart(p) }] : []),
     ...stops.map((s, i) => ({ id: `s${i}`, lat: s.lat, lng: s.lng, kind: "stop" as const, n: i + 1, label: s.label || t(S.stop, { n: num(i + 1, locale) }), draggable: true, onDrag: (p: LatLng) => setStops((x) => x.map((y, j) => (j === i ? { ...y, ...p } : y))) })),
-    ...(dest?.lat != null && dest.lng != null ? [{ id: "dest", lat: dest.lat, lng: dest.lng, kind: "dest" as const, label: locale === "ar" ? dest.nameAr : dest.nameEn }] : []),
+    ...(dest
+      ? [{ id: "dest", lat: dest.lat, lng: dest.lng, kind: "dest" as const, label: dest.name, draggable: !!custom && !destId, onDrag: (p: LatLng) => setCustom((c) => (c ? { ...c, ...p } : c)) }]
+      : []),
   ];
   const circles: MapCircle[] = nearDistricts.map((d) => ({
     id: d.id,
@@ -299,10 +346,32 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
     }),
   }));
 
-  function build(): ServiceInput | string {
+  // Known Masar destinations matching what was typed, offered before the map results
+  const knownMatches = (q: string): PlaceResult[] => {
+    const s = q.trim().toLowerCase();
+    if (s.length < 2) return [];
+    return (dests.data ?? [])
+      .filter((d) => d.lat != null && d.lng != null && (d.nameEn.toLowerCase().includes(s) || d.nameAr.includes(q.trim())))
+      .slice(0, 4)
+      .map((d) => ({ id: `masar:${d.id}`, title: locale === "ar" ? d.nameAr : d.nameEn, subtitle: locale === "ar" ? CITIES_AR[d.city] ?? d.city : d.city, lat: d.lat!, lng: d.lng! }));
+  };
+
+  function pickDestination(r: PlaceResult) {
+    if (r.id.startsWith("masar:")) {
+      setDestId(r.id.slice(6));
+      setCustom(null);
+    } else {
+      setDestId("");
+      setCustom({ name: r.id === "coords" ? "" : r.title, lat: r.lat, lng: r.lng });
+    }
+    setFocus({ lat: r.lat, lng: r.lng, key: Date.now() });
+  }
+
+  function build(destinationId: string): ServiceInput | string {
     if (name.trim().length < 3) return m.errors.fixBelow;
-    if (!destId) return S.destinationHint;
+    if (!destinationId) return S.destinationHint;
     if (!start) return S.routeHelp;
+    if (!accepts) return `${S.accepts}: ${m.errors.fixBelow}`;
     if (!days.length) return errorText(m, "dates_required");
     if (outbound && !(ps <= pe && pe <= ar)) return m.errors.fixBelow;
     if (ret && !(rd < re)) return m.errors.fixBelow;
@@ -317,19 +386,17 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
       ...(id ? { id } : {}),
       name: name.trim(),
       kind,
-      destinationId: destId,
+      destinationId,
       start,
       stops,
       path,
       distanceM,
       durationS,
       accepts,
-      ageMin,
-      ageMax,
       maxChildrenPerFamily: maxKids,
       sharedEnabled: sharedOn,
       exclusiveEnabled: exclOn,
-      limits,
+      limits: REACH_LIMITS[reach],
       discounts: { t1Pct: t1, t2Pct: t2 },
       schedule: {
         days: [...days].sort(),
@@ -357,14 +424,33 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
   }
 
   async function save(applyFrom?: string) {
-    const input = build();
-    if (typeof input === "string") {
-      setError(input);
+    setError(null);
+    if (!destId && custom && custom.name.trim().length < 3) {
+      setError(`${S.destName}: ${m.errors.fixBelow}`);
+      return;
+    }
+    const check = build(destId || (custom ? "pending" : ""));
+    if (typeof check === "string") {
+      setError(check);
       return;
     }
     setBusy(true);
-    setError(null);
     try {
+      let destinationId = destId;
+      if (!destinationId && custom) {
+        // A new place the driver typed or picked on the map becomes a Masar destination
+        const n = custom.name.trim();
+        const d = await backend.addDestination({ nameEn: n, nameAr: n, kind: kind === "school" ? "school" : "other", city: nearestCity(custom), lat: custom.lat, lng: custom.lng });
+        destinationId = d.id;
+        setDestId(d.id);
+        setCustom(null);
+        await dests.reload();
+      }
+      const input = build(destinationId);
+      if (typeof input === "string") {
+        setError(input);
+        return;
+      }
       await backend.saveService(input, applyFrom ?? null);
       setConflict(null);
       onDone();
@@ -385,10 +471,19 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
   if (existing.error) return <ErrorNote m={m} error={existing.error} />;
 
   const names = weekdayNames(locale, "short");
-  const destsByCity = CITIES.map((c) => ({ city: c, items: (dests.data ?? []).filter((d) => d.city === c) })).filter((g) => g.items.length);
   const sharedType = vehicle.type === "car" ? "shared_car" : "shared_bus";
   const exclType = vehicle.type === "car" ? "exclusive_car" : "whole_bus";
-  const firstPrice = parseSar(forms.find((f) => f.enabled)?.daily ?? "") ?? 0;
+  const modeBtn = (v: Exclude<Mode, null>, label: ReactNode, disabled = false) => (
+    <button
+      type="button"
+      aria-pressed={mode === v}
+      disabled={disabled}
+      onClick={() => setMode(mode === v ? null : v)}
+      className={cn("min-h-10 rounded-full border px-4 text-sm font-medium disabled:opacity-50", mode === v ? "border-brand-500 bg-brand-500 text-white" : "border-[var(--line)]")}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <form
@@ -409,80 +504,88 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
             <Field label={S.name} hint={S.nameHint} className="sm:col-span-2">
               {(p) => <Input {...p} maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />}
             </Field>
-            <Field label={S.kind}>
+            <div className="sm:col-span-2">
+              <Choice<"school" | "activity"> name="kind" legend={S.kind} columns={2} value={kind} onChange={setKind} options={(["school", "activity"] as const).map((k) => ({ value: k, label: C.kinds[k] }))} />
+            </div>
+            <div className="sm:col-span-2">
+              <p className="mb-1.5 text-sm font-medium">{S.destination}</p>
+              <p className="mb-2 text-xs text-muted">{S.destinationHint}</p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="flex-1">
+                  <PlaceSearch m={m} locale={locale} placeholder={S.destSearch} onPick={pickDestination} extra={knownMatches} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("dest");
+                    mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                  className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--line)] px-4 text-sm font-medium hover:border-brand-400"
+                >
+                  <IconPin width={16} height={16} /> {S.destOnMap}
+                </button>
+              </div>
+              {known ? (
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-800 dark:bg-brand-900/40 dark:text-brand-100">
+                  <IconPin width={14} height={14} /> {locale === "ar" ? known.nameAr : known.nameEn}
+                </p>
+              ) : custom ? (
+                <div className="mt-3 max-w-md">
+                  <Field label={S.destName} hint={S.destPicked}>
+                    {(p) => <Input {...p} maxLength={120} value={custom.name} onChange={(e) => setCustom((c) => (c ? { ...c, name: e.target.value } : c))} />}
+                  </Field>
+                </div>
+              ) : null}
+            </div>
+            <div className="sm:col-span-2">
+              <Choice<"boys" | "girls"> name="accepts" legend={S.accepts} columns={2} value={accepts} onChange={setAccepts} options={(["boys", "girls"] as const).map((v) => ({ value: v, label: C.accepts[v] }))} />
+            </div>
+            <Field label={S.maxChildren}>
               {(p) => (
-                <Select {...p} value={kind} onChange={(e) => setKind(e.target.value as ServiceRecord["kind"])}>
-                  {(["school", "activity", "trip"] as const).map((k) => (
-                    <option key={k} value={k}>{C.kinds[k]}</option>
+                <Select {...p} value={maxKids} onChange={(e) => setMaxKids(Number(e.target.value))}>
+                  {[1, 2, 3, 4, 5, 6].map((n) => (
+                    <option key={n} value={n}>{num(n, locale)}</option>
                   ))}
                 </Select>
               )}
             </Field>
-            <Field label={S.destination} hint={S.destinationHint}>
-              {(p) => (
-                <div className="flex gap-2">
-                  <Select {...p} value={destId} onChange={(e) => setDestId(e.target.value)}>
-                    <option value="">—</option>
-                    {destsByCity.map((g) => (
-                      <optgroup key={g.city} label={locale === "ar" ? CITIES_AR[g.city] : g.city}>
-                        {g.items.map((d) => (
-                          <option key={d.id} value={d.id}>{locale === "ar" ? d.nameAr : d.nameEn}</option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </Select>
-                  <button type="button" onClick={() => setAddingDest(true)} aria-label={S.addDestination} title={S.addDestination} className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--line)] hover:border-brand-400">
-                    <IconPlus />
-                  </button>
-                </div>
-              )}
-            </Field>
-            <div className="sm:col-span-2">
-              <Choice<ServiceRecord["accepts"]> name="accepts" legend={S.accepts} columns={3} value={accepts} onChange={setAccepts} options={(["both", "boys", "girls"] as const).map((v) => ({ value: v, label: C.accepts[v] }))} />
-            </div>
-            <div className="grid grid-cols-3 gap-3 sm:col-span-2">
-              {[
-                { label: S.ageMin, v: ageMin, set: setAgeMin, opts: Array.from({ length: 16 }, (_, i) => i + 3) },
-                { label: S.ageMax, v: ageMax, set: setAgeMax, opts: Array.from({ length: 16 }, (_, i) => i + 3) },
-                { label: S.maxChildren, v: maxKids, set: setMaxKids, opts: [1, 2, 3, 4, 5, 6] },
-              ].map((x) => (
-                <Field key={x.label} label={x.label}>
-                  {(p) => (
-                    <Select {...p} value={x.v} onChange={(e) => x.set(Number(e.target.value))}>
-                      {x.opts.map((n) => (
-                        <option key={n} value={n}>{num(n, locale)}</option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-              ))}
-            </div>
           </div>
         </Panel>
 
         <Panel title={S.route}>
           <p className="mb-4 text-sm text-muted">{S.routeHelp}</p>
+          <div className="mb-3">
+            <PlaceSearch
+              m={m}
+              locale={locale}
+              placeholder={S.mapSearch}
+              extra={knownMatches}
+              onPick={(r) => {
+                setFocus({ lat: r.lat, lng: r.lng, key: Date.now() });
+                if (mode === "dest") pickDestination(r);
+                else if (mode) place(r, r.id === "coords" ? undefined : r.title);
+              }}
+            />
+          </div>
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <button type="button" aria-pressed={mode === "start"} onClick={() => setMode(mode === "start" ? null : "start")} className={cn("min-h-10 rounded-full border px-4 text-sm font-medium", mode === "start" ? "border-brand-500 bg-brand-500 text-white" : "border-[var(--line)]")}>
-              {S.setStart}
-            </button>
-            <button type="button" aria-pressed={mode === "stop"} disabled={!start} onClick={() => setMode(mode === "stop" ? null : "stop")} className={cn("min-h-10 rounded-full border px-4 text-sm font-medium disabled:opacity-50", mode === "stop" ? "border-brand-500 bg-brand-500 text-white" : "border-[var(--line)]")}>
-              <IconPlus width={14} height={14} className="me-1 inline" /> {S.addStop}
-            </button>
+            {modeBtn("start", S.setStart)}
+            {modeBtn("stop", <><IconPlus width={14} height={14} className="me-1 inline" /> {S.addStop}</>, !start)}
+            {modeBtn("dest", S.setDest)}
             {mode ? <span className="text-sm font-medium text-accent-700 dark:text-accent-300">{S.clickMap}</span> : null}
             {routing ? <IconSpinner className="text-brand-500" /> : null}
           </div>
-          <div className={cn("overflow-hidden rounded-2xl border border-[var(--line)]", mode && "ring-4 ring-brand-500/30")}>
+          <div ref={mapRef} className={cn("overflow-hidden rounded-2xl border border-[var(--line)]", mode && "ring-4 ring-brand-500/30")}>
             <RouteMap
               routes={path.length > 1 ? [{ id: "r", path, dashed: !road }] : []}
               markers={markers}
               circles={circles}
-              onMapClick={onMapClick}
-              fitKey={`${!!start}-${stops.length}-${destId}`}
+              onMapClick={(p) => place(p)}
+              fitKey={`${!!start}-${stops.length}-${destId}-${!!custom}`}
+              focus={focus}
               label={S.route}
               dark={dark}
               attribution={m.location.attribution}
-              className="h-80 sm:h-[26rem]"
+              className="h-80 sm:h-[28rem]"
             />
           </div>
           {routeFailed ? <p className="mt-2 text-xs text-muted">{S.roadFailed}</p> : null}
@@ -510,6 +613,12 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
                 </button>
               </li>
             ))}
+            {dest ? (
+              <li className="flex items-center gap-3 text-sm">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-400 text-brand-950"><IconPin width={14} height={14} /></span>
+                <span className="flex-1 font-medium">{dest.name || S.destination}</span>
+              </li>
+            ) : null}
           </ol>
           {points.length > 1 ? (
             <p className="mt-3 text-sm text-muted">
@@ -519,7 +628,18 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
         </Panel>
 
         <Panel title={S.coverage}>
-          <p className="mb-4 text-sm text-muted">{S.coverageHint}</p>
+          <Choice<Reach>
+            name="reach"
+            legend={S.reach}
+            columns={2}
+            value={reach}
+            onChange={setReach}
+            options={[
+              { value: "same", label: <span className="block"><span className="block font-semibold">{S.reachSame}</span><span className="mt-0.5 block text-xs font-normal text-muted">{S.reachSameHint}</span></span> },
+              { value: "near", label: <span className="block"><span className="block font-semibold">{S.reachNear}</span><span className="mt-0.5 block text-xs font-normal text-muted">{S.reachNearHint}</span></span> },
+            ]}
+          />
+          <p className="mb-4 mt-5 text-sm text-muted">{S.coverageHint}</p>
           {nearDistricts.length ? (
             <ul className="divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)]">
               {nearDistricts.map((d) => {
@@ -600,52 +720,11 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
 
         <Panel title={S.pricing}>
           <div className="mb-4 grid gap-x-8 rounded-2xl border border-[var(--line)] px-4 py-1 sm:grid-cols-2">
-            <SwitchRow label={`${S.shared} — ${C.serviceTypes[sharedType]}`} checked={shared} onChange={setShared} />
-            <SwitchRow label={`${S.exclusive} — ${C.serviceTypes[exclType]}`} checked={exclusive} onChange={setExclusive} />
+            <SwitchRow label={C.serviceTypes[sharedType]} checked={shared} onChange={setShared} />
+            <SwitchRow label={C.serviceTypes[exclType]} checked={exclusive} onChange={setExclusive} />
           </div>
-          <PriceEditor m={m} locale={locale} forms={forms} setForms={setForms} seats={vehicle.seats} t1Pct={t1} t2Pct={t2} />
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {[
-              { label: t(m.ops.dw.pricing.t1, { n: num(10, locale) }), v: t1, set: setT1 },
-              { label: t(m.ops.dw.pricing.t2, { n: num(20, locale) }), v: t2, set: setT2 },
-            ].map((x, i) => (
-              <Field key={i} label={x.label}>
-                {(p) => (
-                  <Select {...p} value={x.v} onChange={(e) => x.set(Number(e.target.value))}>
-                    {[0, 3, 5, 7, 10, 12, 15, 20].map((n) => (
-                      <option key={n} value={n}>{n === 0 ? C.no : `${num(n, locale)}${m.ops.dw.pricing.pctOff}`}</option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-            ))}
-          </div>
-          {firstPrice ? (
-            <p className="mt-4 text-sm text-muted">
-              {t(S.preview, {
-                price: formatSar(firstPrice, locale, { compact: false }),
-                fee: formatSar(Math.round(firstPrice * 0.1), locale, { compact: false }),
-                total: formatSar(firstPrice + Math.round(firstPrice * 0.1), locale, { compact: false }),
-              })}
-            </p>
-          ) : null}
-        </Panel>
-
-        <Panel title={S.limits}>
-          <p className="mb-4 text-sm text-muted">{S.limitsHint}</p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              { label: S.maxPickup, v: limits.maxPickupM / 1000, k: "maxPickupM", mul: 1000, step: 0.5 },
-              { label: S.maxDetour, v: limits.maxDetourM / 1000, k: "maxDetourM", mul: 1000, step: 0.5 },
-              { label: S.maxDetourPct, v: limits.maxDetourPct, k: "maxDetourPct", mul: 1, step: 1 },
-              { label: S.maxStops, v: limits.maxStops, k: "maxStops", mul: 1, step: 1 },
-              { label: S.maxJourney, v: limits.maxJourneyMin, k: "maxJourneyMin", mul: 1, step: 5 },
-            ].map((x) => (
-              <Field key={x.k} label={x.label}>
-                {(p) => <Input {...p} type="number" min={x.step} step={x.step} dir="ltr" value={x.v} onChange={(e) => setLimits((l) => ({ ...l, [x.k]: Math.max(1, Math.round(Number(e.target.value) * x.mul)) }))} />}
-              </Field>
-            ))}
-          </div>
+          <PriceEditor m={m} locale={locale} forms={forms} setForms={setForms} seats={vehicle.seats} />
+          <DiscountFields m={m} locale={locale} t1={t1} t2={t2} setT1={setT1} setT2={setT2} />
         </Panel>
 
         <Panel>
@@ -666,17 +745,6 @@ function ServiceEditor({ m, locale, app, id, onDone }: { m: AppMessages; locale:
       </div>
 
       <ConflictDialog m={m} locale={locale} report={conflict} busy={busy} onClose={() => setConflict(null)} onApplyFrom={(d) => void save(d)} />
-      <AddDestination
-        m={m}
-        locale={locale}
-        open={addingDest}
-        onClose={() => setAddingDest(false)}
-        onAdded={async (d) => {
-          await dests.reload();
-          setDestId(d.id);
-          setAddingDest(false);
-        }}
-      />
     </form>
   );
 }
@@ -738,104 +806,5 @@ function ArchiveButton({ m, id, onDone }: { m: AppMessages; id: string; onDone: 
         </div>
       </Dialog>
     </>
-  );
-}
-
-function AddDestination({ m, locale, open, onClose, onAdded }: { m: AppMessages; locale: Locale; open: boolean; onClose: () => void; onAdded: (d: DestinationGeo) => void }) {
-  const S = m.ops.svc;
-  const { backend } = useAuth();
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<PlaceResult[]>([]);
-  const [pick, setPick] = useState<PlaceResult | null>(null);
-  const [nameEn, setNameEn] = useState("");
-  const [nameAr, setNameAr] = useState("");
-  const [city, setCity] = useState("Khobar");
-  const [kind, setKind] = useState("school");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (q.trim().length < 3) {
-      setResults([]);
-      return;
-    }
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => {
-      osmGeocoder.search(q, locale, ctrl.signal).then(setResults).catch(() => setResults([]));
-    }, 350);
-    return () => {
-      clearTimeout(timer);
-      ctrl.abort();
-    };
-  }, [q, locale]);
-
-  return (
-    <Dialog open={open} onClose={onClose} title={S.addDestination} closeLabel={m.common.close}>
-      <p className="mb-4 text-sm text-muted">{S.addDestinationText}</p>
-      <Field label={m.ops.search.searchPlace}>
-        {(p) => <Input {...p} value={q} onChange={(e) => setQ(e.target.value)} />}
-      </Field>
-      {results.length ? (
-        <ul className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-[var(--line)]">
-          {results.map((r) => (
-            <li key={r.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setPick(r);
-                  setNameEn((n) => n || r.title);
-                  setNameAr((n) => n || r.title);
-                  setResults([]);
-                }}
-                className="block w-full px-3 py-2 text-start text-sm hover:bg-[var(--page-subtle)]"
-              >
-                <span className="font-medium">{r.title}</span> <span className="text-muted">{r.subtitle}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {pick ? (
-        <div className="mt-4 space-y-4">
-          <Field label={S.destNameEn}>{(p) => <Input {...p} dir="ltr" value={nameEn} onChange={(e) => setNameEn(e.target.value)} />}</Field>
-          <Field label={S.destNameAr}>{(p) => <Input {...p} dir="rtl" value={nameAr} onChange={(e) => setNameAr(e.target.value)} />}</Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={S.destCity}>
-              {(p) => (
-                <Select {...p} value={city} onChange={(e) => setCity(e.target.value)}>
-                  {CITIES.map((c) => <option key={c} value={c}>{locale === "ar" ? CITIES_AR[c] : c}</option>)}
-                </Select>
-              )}
-            </Field>
-            <Field label={S.destKind}>
-              {(p) => (
-                <Select {...p} value={kind} onChange={(e) => setKind(e.target.value)}>
-                  {(["school", "tutoring", "sports", "other"] as const).map((k) => <option key={k} value={k}>{S.destKinds[k]}</option>)}
-                </Select>
-              )}
-            </Field>
-          </div>
-          {error ? <Alert tone="error">{error}</Alert> : null}
-          <button
-            type="button"
-            disabled={busy || nameEn.trim().length < 3}
-            onClick={async () => {
-              setBusy(true);
-              setError(null);
-              try {
-                onAdded(await backend.addDestination({ nameEn: nameEn.trim(), nameAr: nameAr.trim(), kind, city, lat: pick.lat, lng: pick.lng }));
-              } catch (e) {
-                setError(errorText(m, e));
-              } finally {
-                setBusy(false);
-              }
-            }}
-            className="min-h-12 w-full rounded-full bg-brand-500 font-semibold text-white disabled:opacity-60"
-          >
-            {S.addDestination}
-          </button>
-        </div>
-      ) : null}
-    </Dialog>
   );
 }

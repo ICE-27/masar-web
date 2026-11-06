@@ -13,15 +13,16 @@ import { ButtonLink, cn } from "@/components/ui";
 import type { ApplicationPatch, DocKind, DriverApplication, HoursRow, PriceRowState, Vehicle } from "@/lib/data";
 import { addDays, riyadhToday } from "@/lib/domain/dates";
 import { formatSar, parseSar, sarInput } from "@/lib/domain/money";
-import { calcPrice, defaultOneWay, typesForVehicle, type ServiceType } from "@/lib/domain/pricing";
+import { typesForVehicle, type ServiceType } from "@/lib/domain/pricing";
 import {
   BUS_MAKES,
-  BUS_TYPES,
-  CAR_CATEGORIES,
   CAR_MAKES,
   PLATE_LETTERS,
+  SAUDI_BANKS,
   bankFromIban,
+  busTypeFor,
   capacityBand,
+  carCategoryFor,
   formatIban,
   ibanValid,
   normalizeIban,
@@ -31,16 +32,16 @@ import {
 } from "@/lib/domain/vehicle";
 import { errorText, num, t } from "@/lib/format";
 import { href, type Locale } from "@/lib/i18n";
+import { useNavigate } from "@/lib/nav";
 import type { AppMessages } from "@/lib/messages/app.en";
 import { formatSaudiMobile, toAsciiDigits } from "@/lib/validation";
 import { HoursEditor, hoursProblems } from "./hours-editor";
 import { CITIES, CITIES_AR, COLORS, COLORS_AR, NATIONALITIES, NATIONALITIES_AR, SECTIONS, docLabel, missingSections, type WizardSection } from "./labels";
 
-const LANGS = ["ar", "en", "ur", "hi", "tl", "bn"] as const;
-
 export function DriverWizard({ locale, m }: { locale: Locale; m: AppMessages }) {
   const D = m.ops.dw;
   const { status, profile, backend } = useAuth();
+  const navigate = useNavigate();
   const [app, setApp] = useState<DriverApplication | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [step, setStep] = useState<number | null>(null);
@@ -51,7 +52,7 @@ export function DriverWizard({ locale, m }: { locale: Locale; m: AppMessages }) 
       .driverApplication()
       .then((a) => {
         setApp(a);
-        setStep((s) => s ?? (a.driver.status === "action_needed" ? 8 : Math.min(8, Math.max(1, a.driver.wizardStep))));
+        setStep((s) => s ?? (a.driver.status === "action_needed" ? 7 : Math.min(7, Math.max(1, a.driver.wizardStep))));
       })
       .catch(setError);
   }, [status, profile, backend]);
@@ -120,7 +121,13 @@ export function DriverWizard({ locale, m }: { locale: Locale; m: AppMessages }) 
     go(next);
   };
 
-  const common = { m, locale, app, setApp };
+  // "Save and continue later": keep what's valid so far, then go to the driver page
+  const later = async (patch: ApplicationPatch) => {
+    if (Object.keys(patch).length) setApp(await backend.saveApplication({ ...patch, step }));
+    navigate(`${href(locale, "/driver")}?saved=1`);
+  };
+
+  const common = { m, locale, app, setApp, onLater: later };
   return (
     <Shell m={m} locale={locale} step={step} onStep={(n) => (n <= Math.max(app.driver.wizardStep, step) ? go(n) : undefined)} maxStep={Math.max(app.driver.wizardStep, step)}>
       {st === "action_needed" ? (
@@ -131,12 +138,11 @@ export function DriverWizard({ locale, m }: { locale: Locale; m: AppMessages }) 
       ) : null}
       {step === 1 ? <StepPersonal {...common} onSave={(p) => save(p, 2)} /> : null}
       {step === 2 ? <StepIdentity {...common} onSave={(p) => save(p, 3)} back={() => go(1)} /> : null}
-      {step === 3 ? <StepLicence {...common} onSave={(p) => save(p, 4)} back={() => go(2)} /> : null}
-      {step === 4 ? <StepVehicle {...common} onSave={(p) => save(p, 5)} back={() => go(3)} /> : null}
-      {step === 5 ? <StepPricing {...common} onSave={(p) => save(p, 6)} back={() => go(4)} /> : null}
-      {step === 6 ? <StepPayout {...common} onSave={(p) => save(p, 7)} back={() => go(5)} /> : null}
-      {step === 7 ? <StepHours {...common} onSave={(p) => save(p, 8)} back={() => go(6)} /> : null}
-      {step === 8 ? <StepReview {...common} goTo={go} back={() => go(7)} /> : null}
+      {step === 3 ? <StepVehicle {...common} onSave={(p) => save(p, 4)} back={() => go(2)} /> : null}
+      {step === 4 ? <StepPricing {...common} onSave={(p) => save(p, 5)} back={() => go(3)} /> : null}
+      {step === 5 ? <StepPayout {...common} onSave={(p) => save(p, 6)} back={() => go(4)} /> : null}
+      {step === 6 ? <StepHours {...common} onSave={(p) => save(p, 7)} back={() => go(5)} /> : null}
+      {step === 7 ? <StepReview {...common} goTo={go} back={() => go(6)} /> : null}
     </Shell>
   );
 }
@@ -149,11 +155,11 @@ function Shell({ m, locale, step, children, onStep, maxStep = 1 }: { m: AppMessa
     <div className="mesh-hero min-h-[calc(100dvh-4rem)] pb-16">
       <div className="container-page max-w-3xl pt-6 sm:pt-10">
         <p className="text-sm font-semibold text-brand-600 dark:text-brand-300">{D.title}</p>
-        <nav aria-label={t(D.stepOf, { n: num(step, locale), total: num(8, locale) })} className="mb-6 mt-2">
+        <nav aria-label={t(D.stepOf, { n: num(step, locale), total: num(SECTIONS.length, locale) })} className="mb-6 mt-2">
           <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-            {t(D.stepOf, { n: num(step, locale), total: num(8, locale) })} · {D.steps[SECTIONS[step - 1]]}
+            {t(D.stepOf, { n: num(step, locale), total: num(SECTIONS.length, locale) })} · {D.steps[SECTIONS[step - 1]]}
           </p>
-          <ol className="grid grid-cols-8 gap-1.5">
+          <ol className="grid grid-cols-7 gap-1.5">
             {SECTIONS.map((s, i) => {
               const n = i + 1;
               const state = n < step ? "done" : n === step ? "current" : "todo";
@@ -190,7 +196,9 @@ function Header({ title, subtitle }: { title: string; subtitle?: string }) {
   );
 }
 
-function Footer({ m, busy, back, error, label }: { m: AppMessages; busy: boolean; back?: () => void; error?: string | null; label?: string }) {
+function Footer({ m, busy, back, error, label, onLater }: { m: AppMessages; busy: boolean; back?: () => void; error?: string | null; label?: string; onLater?: () => Promise<void> }) {
+  const [laterBusy, setLaterBusy] = useState(false);
+  const [laterError, setLaterError] = useState<string | null>(null);
   return (
     <div className="mt-8 space-y-4">
       {error ? <Alert tone="error">{error}</Alert> : null}
@@ -202,10 +210,32 @@ function Footer({ m, busy, back, error, label }: { m: AppMessages; busy: boolean
         ) : (
           <span />
         )}
-        <SubmitButton busy={busy} busyText={m.common.saving} className="w-full sm:w-auto">
-          {label ?? m.ops.dw.saveContinue}
-        </SubmitButton>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+          {onLater ? (
+            <button
+              type="button"
+              disabled={laterBusy || busy}
+              onClick={async () => {
+                setLaterBusy(true);
+                setLaterError(null);
+                try {
+                  await onLater();
+                } catch (e) {
+                  setLaterError(errorText(m, e));
+                  setLaterBusy(false);
+                }
+              }}
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--line)] px-5 text-sm font-medium hover:border-brand-400 disabled:opacity-60"
+            >
+              {laterBusy ? m.common.saving : m.ops.dw.saveLater}
+            </button>
+          ) : null}
+          <SubmitButton busy={busy} busyText={m.common.saving} className="w-full sm:w-auto">
+            {label ?? m.ops.dw.saveContinue}
+          </SubmitButton>
+        </div>
       </div>
+      {laterError ? <Alert tone="error">{laterError}</Alert> : null}
     </div>
   );
 }
@@ -216,6 +246,7 @@ type StepProps = {
   app: DriverApplication;
   setApp: (a: DriverApplication) => void;
   onSave: (p: ApplicationPatch) => Promise<void>;
+  onLater: (p: ApplicationPatch) => Promise<void>;
   back?: () => void;
 };
 
@@ -245,43 +276,68 @@ const docOf = (app: DriverApplication, k: DocKind) => app.documents.find((d) => 
 
 /* ---- 1: you ------------------------------------------------------------- */
 
-function StepPersonal({ m, locale, app, setApp, onSave }: StepProps) {
+const AR_LETTERS = /[؀-ۿ]/;
+const LATIN_LETTERS = /[A-Za-z]/;
+
+/** The name must be written in the page's language: Arabic letters on the Arabic site, English letters on the English one. */
+function nameScriptError(name: string, locale: Locale, A: AppMessages["ops"]["dw"]["account"]): string | null {
+  if (locale === "ar" && LATIN_LETTERS.test(name)) return A.nameNeedsAr;
+  if (locale === "en" && AR_LETTERS.test(name)) return A.nameNeedsEn;
+  return null;
+}
+
+const NATIONALITY_CHIPS = NATIONALITIES.filter((n) => n !== "Other");
+
+function StepPersonal({ m, locale, app, setApp, onSave, onLater }: StepProps) {
   const A = m.ops.dw.account;
   const { profile } = useAuth();
   const d = app.driver;
-  const [phoneDone, setPhoneDone] = useState(!!profile?.phoneVerifiedAt);
+  const [justVerified, setPhoneDone] = useState(false);
+  const phoneDone = justVerified || !!profile?.phoneVerifiedAt || !!app.driver.phoneVerified;
+  const fromProfile = profile?.fullName ?? "";
+  const initialName =
+    (locale === "ar" ? d.nameAr : d.nameEn) ??
+    (fromProfile && !nameScriptError(fromProfile, locale, A) ? fromProfile : "");
+  const known = d.nationality && NATIONALITY_CHIPS.includes(d.nationality);
   const [f, setF] = useState({
-    nameAr: d.nameAr ?? "",
-    nameEn: d.nameEn ?? profile?.fullName ?? "",
+    name: initialName,
     gender: (d.gender ?? "") as "male" | "female" | "",
     dateOfBirth: d.dateOfBirth ?? "",
-    nationality: d.nationality ?? "Saudi",
+    nationality: d.nationality ? (known ? d.nationality : "Other") : "Saudi",
+    nationalityOther: d.nationality && !known ? d.nationality : "",
     city: d.city ?? "",
-    yearsExperience: d.yearsExperience?.toString() ?? "",
-    languages: d.languages?.length ? d.languages : ["ar"],
     bio: d.bio ?? "",
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  const nameErr = nameScriptError(f.name, locale, A);
+
+  const patch = (): ApplicationPatch => {
+    const name = f.name.trim().replace(/\s+/g, " ");
+    const okName = name.length >= 2 && !nameErr ? name : null;
+    return {
+      personal: {
+        // Only the name in this language changes; the other one is kept
+        nameAr: locale === "ar" ? okName : d.nameAr,
+        nameEn: locale === "en" ? okName : d.nameEn,
+        gender: f.gender || null,
+        dateOfBirth: f.dateOfBirth || null,
+        nationality: (f.nationality === "Other" ? f.nationalityOther.trim().slice(0, 60) : f.nationality) || null,
+        city: f.city || null,
+        bio: f.bio.trim(),
+      },
+    };
+  };
+
   const { busy, error, submit } = useSubmit(m, async () => {
     if (!phoneDone) fail(A.phoneFirst);
-    if (f.nameAr.trim().length < 2 || f.nameEn.trim().length < 2) fail(errorText(m, "nameShort"));
+    if (nameErr) fail(nameErr);
+    if (f.name.trim().length < 2) fail(errorText(m, "nameShort"));
     if (!f.gender) fail(m.errors.genderRequired);
     if (!f.dateOfBirth) fail(m.errors.dobRequired);
+    if (f.nationality === "Other" && f.nationalityOther.trim().length < 2) fail(m.errors.fixBelow);
     if (!f.city) fail(m.errors.fixBelow);
     if (!docOf(app, "profile_photo")) fail(`${A.photo}: ${m.ops.dw.upload.required}`);
-    await onSave({
-      personal: {
-        nameAr: f.nameAr.trim(),
-        nameEn: f.nameEn.trim(),
-        gender: f.gender as "male" | "female",
-        dateOfBirth: f.dateOfBirth,
-        nationality: f.nationality,
-        city: f.city,
-        bio: f.bio.trim(),
-        languages: f.languages,
-        yearsExperience: f.yearsExperience ? Number(toAsciiDigits(f.yearsExperience)) : null,
-      },
-    });
+    await onSave(patch());
   });
   const maxDob = addDays(riyadhToday(), -25 * 365 - 6);
 
@@ -297,83 +353,85 @@ function StepPersonal({ m, locale, app, setApp, onSave }: StepProps) {
       )}
 
       <form onSubmit={submit} noValidate>
-
-      <h2 className="mb-4 mt-10 text-xl font-bold">{A.personalTitle}</h2>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label={A.nameAr} hint={A.nameHint}>
-          {(p) => <Input {...p} dir="rtl" lang="ar" value={f.nameAr} onChange={(e) => set("nameAr", e.target.value)} />}
-        </Field>
-        <Field label={A.nameEn} hint={A.nameHint}>
-          {(p) => <Input {...p} dir="ltr" lang="en" className="rtl:text-right" value={f.nameEn} onChange={(e) => set("nameEn", e.target.value)} />}
-        </Field>
-      </div>
-      <div className="mt-5">
-        <Choice<"male" | "female">
-          name="gender"
-          legend={A.gender}
-          value={f.gender}
-          onChange={(v) => set("gender", v)}
-          options={[
-            { value: "male", label: m.ops.common.genders.male },
-            { value: "female", label: m.ops.common.genders.female },
-          ]}
-        />
-      </div>
-      <div className="mt-5 grid gap-5 sm:grid-cols-2">
-        <Field label={A.dob} hint={A.dobHint}>
-          {(p) => <Input {...p} type="date" max={maxDob} value={f.dateOfBirth} onChange={(e) => set("dateOfBirth", e.target.value)} />}
-        </Field>
-        <Field label={A.nationality}>
+        <h2 className="mb-4 mt-10 text-xl font-bold">{A.personalTitle}</h2>
+        <Field label={A.name} error={nameErr}>
           {(p) => (
-            <Select {...p} value={f.nationality} onChange={(e) => set("nationality", e.target.value)}>
-              {NATIONALITIES.map((n) => (
-                <option key={n} value={n}>{locale === "ar" ? NATIONALITIES_AR[n] : n}</option>
-              ))}
-            </Select>
+            <Input
+              {...p}
+              invalid={!!nameErr}
+              dir={locale === "ar" ? "rtl" : "ltr"}
+              lang={locale}
+              autoComplete="name"
+              value={f.name}
+              onChange={(e) => set("name", e.target.value)}
+            />
           )}
         </Field>
-        <Field label={A.city}>
-          {(p) => (
-            <Select {...p} value={f.city} onChange={(e) => set("city", e.target.value)}>
-              <option value="">—</option>
-              {CITIES.map((c) => (
-                <option key={c} value={c}>{locale === "ar" ? CITIES_AR[c] : c}</option>
-              ))}
-            </Select>
-          )}
-        </Field>
-        <Field label={A.years} optional optionalText={m.common.optional}>
-          {(p) => <Input {...p} inputMode="numeric" value={f.yearsExperience} onChange={(e) => set("yearsExperience", e.target.value.replace(/[^\d٠-٩]/g, "").slice(0, 2))} />}
-        </Field>
-      </div>
-      <fieldset className="mt-5">
-        <legend className="mb-2 text-sm font-medium">{A.languages}</legend>
-        <div className="flex flex-wrap gap-2">
-          {LANGS.map((l) => {
-            const on = f.languages.includes(l);
-            return (
-              <button
-                key={l}
-                type="button"
-                aria-pressed={on}
-                onClick={() => set("languages", on ? f.languages.filter((x) => x !== l) : [...f.languages, l])}
-                className={cn("min-h-10 rounded-full border px-4 text-sm", on ? "border-brand-500 bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200" : "border-[var(--line)]")}
-              >
-                {A.langs[l]}
-              </button>
-            );
-          })}
+        <div className="mt-5">
+          <Choice<"male" | "female">
+            name="gender"
+            legend={A.gender}
+            value={f.gender}
+            onChange={(v) => set("gender", v)}
+            options={[
+              { value: "male", label: m.ops.common.genders.male },
+              { value: "female", label: m.ops.common.genders.female },
+            ]}
+          />
         </div>
-      </fieldset>
-      <div className="mt-5">
-        <Field label={A.bio} hint={A.bioHint} optional optionalText={m.common.optional}>
-          {(p) => <Textarea {...p} maxLength={400} value={f.bio} onChange={(e) => set("bio", e.target.value)} />}
-        </Field>
-      </div>
-      <div className="mt-6">
-        <DocUpload m={m} locale={locale} kind="profile_photo" label={A.photo} tip={A.photoTip} doc={docOf(app, "profile_photo")} capture="user" onSaved={setApp} />
-      </div>
-      <Footer m={m} busy={busy} error={error} />
+        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+          <Field label={A.dob} hint={A.dobHint}>
+            {(p) => <Input {...p} type="date" max={maxDob} value={f.dateOfBirth} onChange={(e) => set("dateOfBirth", e.target.value)} />}
+          </Field>
+          <Field label={A.city}>
+            {(p) => (
+              <Select {...p} value={f.city} onChange={(e) => set("city", e.target.value)}>
+                <option value="">—</option>
+                {CITIES.map((c) => (
+                  <option key={c} value={c}>{locale === "ar" ? CITIES_AR[c] : c}</option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </div>
+        <fieldset className="mt-5">
+          <legend className="mb-2 text-sm font-medium">{A.nationality}</legend>
+          <div className="flex flex-wrap gap-2">
+            {[...NATIONALITY_CHIPS, "Other"].map((n) => {
+              const on = f.nationality === n;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => set("nationality", n)}
+                  className={cn(
+                    "min-h-10 rounded-full border px-4 text-sm transition-colors",
+                    on ? "border-brand-500 bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200" : "border-[var(--line)] hover:border-brand-300",
+                  )}
+                >
+                  {locale === "ar" ? NATIONALITIES_AR[n] : n}
+                </button>
+              );
+            })}
+          </div>
+          {f.nationality === "Other" ? (
+            <div className="mt-3 max-w-sm">
+              <Field label={A.nationalityOther}>
+                {(p) => <Input {...p} maxLength={60} value={f.nationalityOther} onChange={(e) => set("nationalityOther", e.target.value)} />}
+              </Field>
+            </div>
+          ) : null}
+        </fieldset>
+        <div className="mt-5">
+          <Field label={A.bio} hint={A.bioHint} optional optionalText={m.common.optional}>
+            {(p) => <Textarea {...p} rows={2} maxLength={300} value={f.bio} onChange={(e) => set("bio", e.target.value)} />}
+          </Field>
+        </div>
+        <div className="mt-6">
+          <DocUpload m={m} locale={locale} kind="profile_photo" label={A.photo} tip={A.photoTip} doc={docOf(app, "profile_photo")} capture="user" onSaved={setApp} />
+        </div>
+        <Footer m={m} busy={busy} error={error} onLater={() => onLater(patch())} />
       </form>
     </>
   );
@@ -381,104 +439,77 @@ function StepPersonal({ m, locale, app, setApp, onSave }: StepProps) {
 
 /* ---- 2: identity ---------------------------------------------------------- */
 
-function StepIdentity({ m, locale, app, setApp, onSave, back }: StepProps) {
+function StepIdentity({ m, locale, app, setApp, onSave, onLater, back }: StepProps) {
   const I = m.ops.dw.identity;
   const d = app.driver;
   const [idNumber, setIdNumber] = useState(d.idNumber ?? "");
+  const [idIssued, setIdIssued] = useState(d.idIssued ?? "");
   const [idExpiry, setIdExpiry] = useState(d.idExpiry ?? "");
   const [policeIssued, setPoliceIssued] = useState(d.policeIssued ?? "");
   const today = riyadhToday();
+  const patch = (): ApplicationPatch => ({
+    identity: {
+      idNumber: validSaudiId(idNumber) ? idNumber : null,
+      idIssued: idIssued && idIssued <= today ? idIssued : null,
+      idExpiry: idExpiry && idExpiry > today ? idExpiry : null,
+      policeIssued: policeIssued && policeIssued >= addDays(today, -365) && policeIssued <= today ? policeIssued : null,
+    },
+  });
   const { busy, error, submit } = useSubmit(m, async () => {
     if (!validSaudiId(idNumber)) fail(I.idHint);
+    if (!idIssued || idIssued > today) fail(m.errors.fixBelow);
     if (!idExpiry || idExpiry <= today) fail(errorText(m, "document_expired"));
     if (!policeIssued || policeIssued < addDays(today, -365) || policeIssued > today) fail(errorText(m, "police_too_old"));
-    for (const k of ["id_front", "id_back", "selfie", "police"] as DocKind[]) if (!docOf(app, k)) fail(`${docLabel(m, k)}: ${m.ops.dw.upload.required}`);
-    await onSave({ identity: { idNumber, idExpiry, policeIssued } });
+    for (const k of ["id_front", "police"] as DocKind[]) if (!docOf(app, k)) fail(`${docLabel(m, k)}: ${m.ops.dw.upload.required}`);
+    await onSave(patch());
   });
   return (
     <form onSubmit={submit} noValidate>
       <Header title={I.title} subtitle={I.subtitle} />
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label={I.idNumber} hint={I.idHint}>
-          {(p) => <Input {...p} inputMode="numeric" dir="ltr" className="tracking-widest rtl:text-right" maxLength={10} value={idNumber} onChange={(e) => setIdNumber(toAsciiDigits(e.target.value).replace(/\D/g, "").slice(0, 10))} autoComplete="off" />}
+      <Field label={I.idNumber} hint={I.idHint}>
+        {(p) => <Input {...p} inputMode="numeric" dir="ltr" className="tracking-widest rtl:text-right" maxLength={10} value={idNumber} onChange={(e) => setIdNumber(toAsciiDigits(e.target.value).replace(/\D/g, "").slice(0, 10))} autoComplete="off" />}
+      </Field>
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-5">
+        <Field label={I.idIssued}>
+          {(p) => <Input {...p} type="date" max={today} value={idIssued} onChange={(e) => setIdIssued(e.target.value)} />}
         </Field>
         <Field label={I.idExpiry}>
           {(p) => <Input {...p} type="date" min={addDays(today, 1)} value={idExpiry} onChange={(e) => setIdExpiry(e.target.value)} />}
         </Field>
       </div>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <DocUpload m={m} locale={locale} kind="id_front" label={I.idFront} tip={m.ops.dw.upload.tips} doc={docOf(app, "id_front")} onSaved={setApp} />
-        <DocUpload m={m} locale={locale} kind="id_back" label={I.idBack} tip={m.ops.dw.upload.tips} doc={docOf(app, "id_back")} onSaved={setApp} />
-        <DocUpload m={m} locale={locale} kind="selfie" label={I.selfie} tip={I.selfieTip} doc={docOf(app, "selfie")} capture="user" onSaved={setApp} />
-        <div className="rounded-2xl border border-[var(--line)] p-4">
+      <div className="mt-6">
+        <DocUpload m={m} locale={locale} kind="id_front" label={I.idImage} tip={m.ops.dw.upload.tips} doc={docOf(app, "id_front")} onSaved={setApp} />
+      </div>
+      <section className="mt-6 rounded-2xl border border-[var(--line)] p-4 sm:p-5">
+        <h2 className="font-semibold">{I.police}</h2>
+        <p className="mt-1 text-sm text-muted">{I.policeRequired}</p>
+        <p className="mt-3 rounded-xl bg-[var(--page-subtle)] p-3 text-sm leading-relaxed">{I.policeHow}</p>
+        <div className="mt-4 max-w-xs">
           <Field label={I.policeIssued} hint={I.policeHint}>
             {(p) => <Input {...p} type="date" min={addDays(today, -365)} max={today} value={policeIssued} onChange={(e) => setPoliceIssued(e.target.value)} />}
           </Field>
-          <div className="mt-3">
-            <DocUpload m={m} locale={locale} kind="police" label={I.police} doc={docOf(app, "police")} onSaved={setApp} compact />
-          </div>
         </div>
-      </div>
+        <div className="mt-3">
+          <DocUpload m={m} locale={locale} kind="police" label={I.policeFile} doc={docOf(app, "police")} onSaved={setApp} compact />
+        </div>
+      </section>
       <p className="mt-4 text-xs text-muted">{I.nafath}</p>
-      <Footer m={m} busy={busy} error={error} back={back} />
+      <Footer m={m} busy={busy} error={error} back={back} onLater={() => onLater(patch())} />
     </form>
   );
 }
 
-/* ---- 3: licence ----------------------------------------------------------- */
+/* ---- 3: licence and vehicle ----------------------------------------------- */
 
-function StepLicence({ m, locale, app, setApp, onSave, back }: StepProps) {
-  const L = m.ops.dw.licence;
-  const d = app.driver;
-  const [num_, setNum] = useState(d.licenceNumber ?? "");
-  const [type, setType] = useState<"private" | "public" | "heavy" | "">(d.licenceType ?? "");
-  const [expiry, setExpiry] = useState(d.licenceExpiry ?? "");
-  const today = riyadhToday();
-  const { busy, error, submit } = useSubmit(m, async () => {
-    if (!/^\d{6,12}$/.test(num_)) fail(m.errors.fixBelow);
-    if (!type) fail(m.errors.fixBelow);
-    if (!expiry || expiry <= today) fail(errorText(m, "document_expired"));
-    if (!docOf(app, "licence")) fail(`${L.image}: ${m.ops.dw.upload.required}`);
-    if (app.vehicle?.type === "bus" && type === "private") fail(errorText(m, "bus_needs_public_licence"));
-    await onSave({ licence: { licenceNumber: num_, licenceType: type as "private", licenceExpiry: expiry } });
-  });
-  return (
-    <form onSubmit={submit} noValidate>
-      <Header title={L.title} subtitle={L.subtitle} />
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label={L.number}>
-          {(p) => <Input {...p} inputMode="numeric" dir="ltr" className="rtl:text-right" value={num_} onChange={(e) => setNum(toAsciiDigits(e.target.value).replace(/\D/g, "").slice(0, 12))} />}
-        </Field>
-        <Field label={L.expiry}>
-          {(p) => <Input {...p} type="date" min={addDays(today, 1)} value={expiry} onChange={(e) => setExpiry(e.target.value)} />}
-        </Field>
-      </div>
-      <div className="mt-5">
-        <Choice<"private" | "public" | "heavy">
-          name="licence-type"
-          legend={L.type}
-          columns={3}
-          value={type}
-          onChange={setType}
-          options={(["private", "public", "heavy"] as const).map((v) => ({ value: v, label: L.types[v] }))}
-        />
-      </div>
-      <div className="mt-6">
-        <DocUpload m={m} locale={locale} kind="licence" label={L.image} tip={m.ops.dw.upload.tips} doc={docOf(app, "licence")} onSaved={setApp} />
-      </div>
-      <Footer m={m} busy={busy} error={error} back={back} />
-    </form>
-  );
-}
-
-/* ---- 4: vehicle ----------------------------------------------------------- */
-
-function StepVehicle({ m, locale, app, setApp, onSave, back }: StepProps) {
+function StepVehicle({ m, locale, app, setApp, onSave, onLater, back }: StepProps) {
   const V = m.ops.dw.vehicle;
+  const L = m.ops.dw.licence;
   const C = m.ops.common;
   const v = app.vehicle;
-  const female = app.driver.gender === "female";
+  const d = app.driver;
+  const female = d.gender === "female";
   const year = Number(riyadhToday().slice(0, 4));
+  const today = riyadhToday();
   const [f, setF] = useState<Vehicle>({
     type: v?.type ?? (female ? "car" : (undefined as unknown as "car")),
     make: v?.make ?? "",
@@ -486,54 +517,80 @@ function StepVehicle({ m, locale, app, setApp, onSave, back }: StepProps) {
     year: v?.year ?? year - 2,
     color: v?.color ?? "White",
     seats: v?.seats ?? null,
-    carCategory: v?.carCategory ?? "sedan",
-    busType: v?.busType ?? "minivan",
+    carCategory: v?.carCategory ?? null,
+    busType: v?.busType ?? null,
     ac: v?.ac ?? true,
-    gps: v?.gps ?? false,
+    gps: false,
     cameras: v?.cameras ?? false,
     seatbelts: v?.seatbelts ?? true,
     femaleAttendant: v?.femaleAttendant ?? false,
     wheelchair: v?.wheelchair ?? false,
     plateDigits: v?.plateDigits ?? "",
     plateLetters: v?.plateLetters ?? "",
+    otherFeatures: v?.otherFeatures ?? "",
   });
+  const [lic, setLic] = useState({ number: d.licenceNumber ?? "", expiry: d.licenceExpiry ?? "" });
+  const knownColor = !f.color || COLORS.includes(f.color);
+  const [colorPick, setColorPick] = useState(knownColor ? (f.color ?? "White") : "Other");
+  const [colorOther, setColorOther] = useState(knownColor ? "" : (f.color ?? ""));
   const set = <K extends keyof typeof f>(k: K, val: (typeof f)[K]) => setF((x) => ({ ...x, [k]: val }));
   const makes = f.type === "bus" ? BUS_MAKES : CAR_MAKES;
   const models = f.make ? (makes[f.make] ?? []) : [];
   const [modelOther, setModelOther] = useState(() => !!v?.model && !((v.type === "bus" ? BUS_MAKES : CAR_MAKES)[v.make ?? ""] ?? []).includes(v.model));
   const typedModel = f.make === "Other" || !models.length || modelOther;
   const maxAge = 10;
+  // The vehicle decides the licence: a private car needs a private licence, a bus a public one
+  const licenceType = f.type === "bus" ? "public" : "private";
+  const color = colorPick === "Other" ? colorOther.trim().slice(0, 30) : colorPick;
+
+  const patch = (): ApplicationPatch => {
+    const model = (f.model ?? "").trim();
+    return {
+      licence: {
+        licenceNumber: /^\d{6,12}$/.test(lic.number) ? lic.number : null,
+        licenceType: f.type ? licenceType : null,
+        licenceExpiry: lic.expiry && lic.expiry > today ? lic.expiry : null,
+      },
+      ...(f.type
+        ? {
+            vehicle: {
+              type: f.type,
+              make: f.make || null,
+              model: model || null,
+              year: f.year && f.year >= year - maxAge && f.year <= year + 1 ? f.year : null,
+              color: color || null,
+              seats: f.seats,
+              carCategory: f.type === "car" ? carCategoryFor(model) : null,
+              busType: f.type === "bus" ? busTypeFor(f.seats) : null,
+              ac: f.ac,
+              gps: false,
+              cameras: f.cameras,
+              seatbelts: f.seatbelts,
+              femaleAttendant: f.femaleAttendant,
+              wheelchair: f.wheelchair,
+              plateDigits: /^\d{1,4}$/.test(f.plateDigits ?? "") ? (f.plateDigits ?? "") : "",
+              plateLetters: /^[A-Z]{1,3}$/.test(f.plateLetters ?? "") ? (f.plateLetters ?? "") : "",
+              otherFeatures: (f.otherFeatures ?? "").trim().slice(0, 200),
+            },
+          }
+        : {}),
+    };
+  };
 
   const { busy, error, submit } = useSubmit(m, async () => {
     if (!f.type) fail(V.chooseType);
     if (f.type === "bus" && female) fail(errorText(m, "female_bus_not_allowed"));
+    if (!/^\d{6,12}$/.test(lic.number)) fail(`${L.number}: ${m.errors.fixBelow}`);
+    if (!lic.expiry || lic.expiry <= today) fail(errorText(m, "document_expired"));
+    if (!docOf(app, "licence")) fail(`${L.image}: ${m.ops.dw.upload.required}`);
     const model = (f.model ?? "").trim();
-    if (!f.make || !model || !f.color) fail(m.errors.fixBelow);
+    if (!f.make || !model || !color) fail(m.errors.fixBelow);
     if (!f.year || f.year < year - maxAge || f.year > year + 1) fail(t(errorText(m, "vehicle_too_old"), { s: num(year - maxAge, locale) }));
     if (!f.seats || (f.type === "car" ? f.seats > 7 || f.seats < 1 : f.seats < 8 || f.seats > 60)) fail(m.errors.fixBelow);
     if (!/^\d{1,4}$/.test(f.plateDigits ?? "") || !/^[A-Z]{1,3}$/.test(f.plateLetters ?? "")) fail(V.plateHint);
     const needs: DocKind[] = ["istimara", "insurance", "fahas", "car_front", "car_back", "car_side", "car_interior", ...(f.type === "bus" ? (["tga_card", "first_aid"] as DocKind[]) : [])];
     for (const k of needs) if (!docOf(app, k)) fail(`${docLabel(m, k)}: ${m.ops.dw.upload.required}`);
-    await onSave({
-      vehicle: {
-        type: f.type,
-        make: f.make,
-        model,
-        year: f.year,
-        color: f.color,
-        seats: f.seats,
-        carCategory: f.type === "car" ? f.carCategory : null,
-        busType: f.type === "bus" ? f.busType : null,
-        ac: f.ac,
-        gps: f.gps,
-        cameras: f.cameras,
-        seatbelts: f.seatbelts,
-        femaleAttendant: f.femaleAttendant,
-        wheelchair: f.wheelchair,
-        plateDigits: f.plateDigits ?? "",
-        plateLetters: f.plateLetters ?? "",
-      },
-    });
+    await onSave(patch());
   });
 
   const TypeCard = ({ value, title, text, icon, disabled }: { value: "car" | "bus"; title: string; text: string; icon: ReactNode; disabled?: boolean }) => (
@@ -542,6 +599,7 @@ function StepVehicle({ m, locale, app, setApp, onSave, back }: StepProps) {
       disabled={disabled}
       aria-pressed={f.type === value}
       onClick={() => {
+        if (f.type === value) return;
         setF((x) => ({ ...x, type: value, make: "", model: "", seats: null }));
         setModelOther(false);
       }}
@@ -568,6 +626,20 @@ function StepVehicle({ m, locale, app, setApp, onSave, back }: StepProps) {
 
       {f.type ? (
         <>
+          <h2 className="mb-1 mt-8 text-lg font-bold">{V.licenceTitle}</h2>
+          <p className="mb-4 text-sm text-muted">{t(L.needs, { type: L.types[licenceType] })}</p>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field label={L.number}>
+              {(p) => <Input {...p} inputMode="numeric" dir="ltr" className="rtl:text-right" value={lic.number} onChange={(e) => setLic((x) => ({ ...x, number: toAsciiDigits(e.target.value).replace(/\D/g, "").slice(0, 12) }))} />}
+            </Field>
+            <Field label={L.expiry}>
+              {(p) => <Input {...p} type="date" min={addDays(today, 1)} value={lic.expiry} onChange={(e) => setLic((x) => ({ ...x, expiry: e.target.value }))} />}
+            </Field>
+          </div>
+          <div className="mt-4">
+            <DocUpload m={m} locale={locale} kind="licence" label={L.image} tip={m.ops.dw.upload.tips} doc={docOf(app, "licence")} onSaved={setApp} compact />
+          </div>
+
           <h2 className="mb-4 mt-8 text-lg font-bold">{V.details}</h2>
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label={V.make}>
@@ -610,7 +682,7 @@ function StepVehicle({ m, locale, app, setApp, onSave, back }: StepProps) {
             ) : null}
             {f.make && typedModel ? (
               <Field label={V.otherModel}>
-                {(p) => <Input {...p} value={f.model ?? ""} onChange={(e) => set("model", e.target.value)} />}
+                {(p) => <Input {...p} maxLength={40} value={f.model ?? ""} onChange={(e) => set("model", e.target.value)} />}
               </Field>
             ) : null}
             <Field label={V.year} hint={t(V.yearHint, { n: num(maxAge, locale) })}>
@@ -624,13 +696,18 @@ function StepVehicle({ m, locale, app, setApp, onSave, back }: StepProps) {
             </Field>
             <Field label={V.color}>
               {(p) => (
-                <Select {...p} value={f.color ?? ""} onChange={(e) => set("color", e.target.value)}>
+                <Select {...p} value={colorPick} onChange={(e) => setColorPick(e.target.value)}>
                   {COLORS.map((c) => (
                     <option key={c} value={c}>{locale === "ar" ? COLORS_AR[c] : c}</option>
                   ))}
                 </Select>
               )}
             </Field>
+            {colorPick === "Other" ? (
+              <Field label={V.colorOther}>
+                {(p) => <Input {...p} maxLength={30} value={colorOther} onChange={(e) => setColorOther(e.target.value)} />}
+              </Field>
+            ) : null}
             <Field label={f.type === "car" ? V.seats : V.capacity} hint={f.type === "car" ? V.seatsCarHint : undefined}>
               {(p) => (
                 <Select {...p} value={f.seats ?? ""} onChange={(e) => set("seats", Number(e.target.value))}>
@@ -641,34 +718,18 @@ function StepVehicle({ m, locale, app, setApp, onSave, back }: StepProps) {
                 </Select>
               )}
             </Field>
-            {f.type === "car" ? (
-              <Field label={V.category}>
-                {(p) => (
-                  <Select {...p} value={f.carCategory ?? "sedan"} onChange={(e) => set("carCategory", e.target.value as Vehicle["carCategory"])}>
-                    {CAR_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{C.carCategories[c]}</option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-            ) : (
-              <Field label={V.busType}>
-                {(p) => (
-                  <Select {...p} value={f.busType ?? "minivan"} onChange={(e) => set("busType", e.target.value as Vehicle["busType"])}>
-                    {BUS_TYPES.map((c) => (
-                      <option key={c} value={c}>{C.busTypes[c]}</option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-            )}
           </div>
 
           <h3 className="mb-2 mt-6 text-sm font-semibold">{V.amenities}</h3>
           <div className="grid gap-x-8 rounded-2xl border border-[var(--line)] px-4 py-2 sm:grid-cols-2">
-            {(["ac", "seatbelts", "gps", "cameras", ...(f.type === "bus" ? (["femaleAttendant", "wheelchair"] as const) : (["wheelchair"] as const))] as const).map((k) => (
+            {(["ac", "seatbelts", "cameras", ...(f.type === "bus" ? (["femaleAttendant", "wheelchair"] as const) : (["wheelchair"] as const))] as const).map((k) => (
               <SwitchRow key={k} label={C.amenities[k]} checked={!!f[k]} onChange={(val) => set(k, val)} />
             ))}
+          </div>
+          <div className="mt-3">
+            <Field label={V.otherFeatures} hint={V.otherFeaturesHint} optional optionalText={m.common.optional}>
+              {(p) => <Input {...p} maxLength={200} value={f.otherFeatures ?? ""} onChange={(e) => set("otherFeatures", e.target.value)} />}
+            </Field>
           </div>
 
           <h2 className="mb-2 mt-8 text-lg font-bold">{V.plate}</h2>
@@ -725,12 +786,12 @@ function StepVehicle({ m, locale, app, setApp, onSave, back }: StepProps) {
           </div>
         </>
       ) : null}
-      <Footer m={m} busy={busy} error={error} back={back} />
+      <Footer m={m} busy={busy} error={error} back={back} onLater={() => onLater(patch())} />
     </form>
   );
 }
 
-/* ---- 5: prices ------------------------------------------------------------ */
+/* ---- 4: prices ------------------------------------------------------------ */
 
 const DEFAULT_PRICES: Record<ServiceType, { daily: number; enabled: boolean; maxChildren?: number; attendantFee?: number }> = {
   shared_car: { daily: 2000, enabled: true },
@@ -739,7 +800,7 @@ const DEFAULT_PRICES: Record<ServiceType, { daily: number; enabled: boolean; max
   whole_bus: { daily: 65000, enabled: false, attendantFee: 8000 },
 };
 
-type PriceForm = { type: ServiceType; enabled: boolean; daily: string; oneWay: string; perTrip: string; maxChildren: string; attendant: boolean; attendantFee: string };
+type PriceForm = { type: ServiceType; enabled: boolean; daily: string; maxChildren: string; attendant: boolean; attendantFee: string };
 
 export function initialPriceForms(vehicle: "car" | "bus", rows: PriceRowState[]): PriceForm[] {
   return typesForVehicle(vehicle).map((type) => {
@@ -749,8 +810,6 @@ export function initialPriceForms(vehicle: "car" | "bus", rows: PriceRowState[])
       type,
       enabled: r ? r.enabled : d.enabled,
       daily: sarInput(r?.dailyH ?? d.daily),
-      oneWay: sarInput(r?.oneWayH ?? defaultOneWay(r?.dailyH ?? d.daily)),
-      perTrip: sarInput(r?.perTripH ?? null),
       maxChildren: String(r?.maxChildren ?? d.maxChildren ?? ""),
       attendant: r?.attendantAvailable ?? false,
       attendantFee: sarInput(r?.attendantFeeH ?? d.attendantFee ?? null),
@@ -758,6 +817,7 @@ export function initialPriceForms(vehicle: "car" | "bus", rows: PriceRowState[])
   });
 }
 
+/** One-way trips are charged at 60% of the daily price (set by Masar, not the driver). */
 export function priceFormsToRows(forms: PriceForm[]): PriceRowState[] | null {
   const rows: PriceRowState[] = [];
   for (const f of forms) {
@@ -767,8 +827,8 @@ export function priceFormsToRows(forms: PriceForm[]): PriceRowState[] | null {
       serviceType: f.type,
       enabled: f.enabled,
       dailyH: daily ?? 100,
-      oneWayH: parseSar(f.oneWay) ?? (daily ? defaultOneWay(daily) : null),
-      perTripH: parseSar(f.perTrip),
+      oneWayH: null,
+      perTripH: null,
       maxChildren: f.maxChildren ? Number(f.maxChildren) : null,
       attendantAvailable: f.attendant,
       attendantFeeH: f.attendant ? (parseSar(f.attendantFee) ?? 0) : 0,
@@ -783,28 +843,21 @@ export function PriceEditor({
   forms,
   setForms,
   seats,
-  t1Pct,
-  t2Pct,
 }: {
   m: AppMessages;
   locale: Locale;
   forms: PriceForm[];
   setForms: (f: PriceForm[]) => void;
   seats: number | null;
-  t1Pct: number;
-  t2Pct: number;
 }) {
   const P = m.ops.dw.pricing;
   const C = m.ops.common;
+  const sar = locale === "ar" ? "ر.س" : "SAR";
   const upd = (i: number, patch: Partial<PriceForm>) => setForms(forms.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   return (
     <div className="space-y-4">
       {forms.map((f, i) => {
-        const exclusive = f.type === "exclusive_car" || f.type === "whole_bus";
-        const daily = parseSar(f.daily) ?? 0;
-        const units = exclusive ? 1 : 2;
-        const q = calcPrice({ rateH: daily, units, days: 22, t1Pct, t2Pct });
-        const sar = (h: number) => formatSar(h, locale, { compact: false });
+        const dailyLabel = f.type === "exclusive_car" ? P.dailyCar : f.type === "whole_bus" ? P.dailyBus : P.daily;
         return (
           <fieldset key={f.type} className={cn("rounded-2xl border p-4 sm:p-5", f.enabled ? "border-brand-300 dark:border-brand-800" : "border-[var(--line)]")}>
             <legend className="sr-only">{C.serviceTypes[f.type]}</legend>
@@ -819,31 +872,10 @@ export function PriceEditor({
             </div>
             {f.enabled ? (
               <>
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                  <Field label={`${P.daily} (${locale === "ar" ? "ر.س" : "SAR"})`}>
-                    {(p) => (
-                      <Input
-                        {...p}
-                        inputMode="decimal"
-                        dir="ltr"
-                        className="rtl:text-right"
-                        value={f.daily}
-                        onChange={(e) => {
-                          const d = parseSar(e.target.value);
-                          const wasDefault = parseSar(f.oneWay) === defaultOneWay(parseSar(f.daily) ?? 0);
-                          upd(i, { daily: e.target.value, ...(wasDefault && d ? { oneWay: sarInput(defaultOneWay(d)) } : {}) });
-                        }}
-                      />
-                    )}
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <Field label={`${dailyLabel} (${sar})`}>
+                    {(p) => <Input {...p} inputMode="decimal" dir="ltr" className="rtl:text-right" value={f.daily} onChange={(e) => upd(i, { daily: e.target.value })} />}
                   </Field>
-                  <Field label={`${P.oneWay} (${locale === "ar" ? "ر.س" : "SAR"})`} hint={P.oneWayHint}>
-                    {(p) => <Input {...p} inputMode="decimal" dir="ltr" className="rtl:text-right" value={f.oneWay} onChange={(e) => upd(i, { oneWay: e.target.value })} />}
-                  </Field>
-                  {exclusive ? (
-                    <Field label={`${P.perTrip} (${locale === "ar" ? "ر.س" : "SAR"})`} hint={P.perTripHint} optional optionalText={m.common.optional}>
-                      {(p) => <Input {...p} inputMode="decimal" dir="ltr" className="rtl:text-right" value={f.perTrip} onChange={(e) => upd(i, { perTrip: e.target.value })} />}
-                    </Field>
-                  ) : null}
                   {f.type === "exclusive_car" ? (
                     <Field label={P.maxChildren}>
                       {(p) => (
@@ -864,7 +896,7 @@ export function PriceEditor({
                     </Checkbox>
                     {f.attendant ? (
                       <div className="mt-3 max-w-xs">
-                        <Field label={`${P.attendantFee} (${locale === "ar" ? "ر.س" : "SAR"})`}>
+                        <Field label={`${P.attendantFee} (${sar})`}>
                           {(p) => <Input {...p} inputMode="decimal" dir="ltr" className="rtl:text-right" value={f.attendantFee} onChange={(e) => upd(i, { attendantFee: e.target.value })} />}
                         </Field>
                       </div>
@@ -878,21 +910,6 @@ export function PriceEditor({
                     </Checkbox>
                   </div>
                 ) : null}
-                {daily > 0 ? (
-                  <p className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm leading-relaxed text-brand-900 dark:border-brand-800 dark:bg-brand-900/30 dark:text-brand-100">
-                    <span className="font-semibold">{P.preview}: </span>
-                    {t(exclusive ? P.previewVehicle : P.previewText, {
-                      rate: sar(daily),
-                      days: num(22, locale),
-                      line: sar(q.lineH),
-                      disc: q.discountPct ? t(P.previewDisc, { pct: num(q.discountPct, locale) }) : "",
-                      driver: sar(q.driverH),
-                      vat: sar(q.vatH),
-                      fee: sar(q.feeH),
-                      total: sar(q.totalH),
-                    })}
-                  </p>
-                ) : null}
               </>
             ) : null}
           </fieldset>
@@ -902,16 +919,20 @@ export function PriceEditor({
   );
 }
 
-function StepPricing({ m, locale, app, onSave, back }: StepProps) {
+function StepPricing({ m, locale, app, onSave, onLater, back }: StepProps) {
   const P = m.ops.dw.pricing;
   const vt = app.vehicle?.type ?? "car";
   const [forms, setForms] = useState(() => initialPriceForms(vt, app.pricing));
   const [t1, setT1] = useState(app.driver.discountT1Pct);
   const [t2, setT2] = useState(app.driver.discountT2Pct);
+  const patch = (): ApplicationPatch => {
+    const rows = priceFormsToRows(forms);
+    return rows && rows.some((r) => r.enabled) && app.vehicle ? { pricing: { types: rows, discountT1Pct: t1, discountT2Pct: t2 } } : {};
+  };
   const { busy, error, submit } = useSubmit(m, async () => {
     const rows = priceFormsToRows(forms);
     if (!rows || !rows.some((r) => r.enabled)) fail(errorText(m, "pricing_required"));
-    await onSave({ pricing: { types: rows!, discountT1Pct: t1, discountT2Pct: t2 } });
+    await onSave(patch());
   });
   return (
     <form onSubmit={submit} noValidate>
@@ -919,81 +940,117 @@ function StepPricing({ m, locale, app, onSave, back }: StepProps) {
       <Alert tone="info" className="mb-5">
         {P.helper} {P.youKeep}
       </Alert>
-      <PriceEditor m={m} locale={locale} forms={forms} setForms={setForms} seats={app.vehicle?.seats ?? null} t1Pct={t1} t2Pct={t2} />
-      <fieldset className="mt-6 rounded-2xl border border-[var(--line)] p-4 sm:p-5">
-        <legend className="px-1 font-semibold">{P.discounts}</legend>
-        <p className="mb-4 text-sm text-muted">{P.discountsHint}</p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {[
-            { label: t(P.t1, { n: num(10, locale) }), v: t1, set: setT1 },
-            { label: t(P.t2, { n: num(20, locale) }), v: t2, set: setT2 },
-          ].map((x, i) => (
-            <Field key={i} label={x.label}>
-              {(p) => (
-                <Select {...p} value={x.v} onChange={(e) => x.set(Number(e.target.value))}>
-                  {[0, 3, 5, 7, 10, 12, 15, 20].map((n) => (
-                    <option key={n} value={n}>{n === 0 ? m.ops.common.no : `${num(n, locale)}${P.pctOff}`}</option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          ))}
-        </div>
-      </fieldset>
-      <Footer m={m} busy={busy} error={error} back={back} />
+      <PriceEditor m={m} locale={locale} forms={forms} setForms={setForms} seats={app.vehicle?.seats ?? null} />
+      <DiscountFields m={m} locale={locale} t1={t1} t2={t2} setT1={setT1} setT2={setT2} />
+      <Footer m={m} busy={busy} error={error} back={back} onLater={() => onLater(patch())} />
     </form>
   );
 }
 
-/* ---- 6: payouts ----------------------------------------------------------- */
+export function DiscountFields({ m, locale, t1, t2, setT1, setT2 }: { m: AppMessages; locale: Locale; t1: number; t2: number; setT1: (n: number) => void; setT2: (n: number) => void }) {
+  const P = m.ops.dw.pricing;
+  return (
+    <fieldset className="mt-6 rounded-2xl border border-[var(--line)] p-4 sm:p-5">
+      <legend className="px-1 font-semibold">{P.discounts}</legend>
+      <p className="mb-4 text-sm text-muted">{P.discountsHint}</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {[
+          { label: t(P.t1, { n: num(10, locale) }), v: t1, set: setT1 },
+          { label: t(P.t2, { n: num(20, locale) }), v: t2, set: setT2 },
+        ].map((x, i) => (
+          <Field key={i} label={x.label}>
+            {(p) => (
+              <Select {...p} value={x.v} onChange={(e) => x.set(Number(e.target.value))}>
+                {[0, 3, 5, 7, 10, 12, 15, 20].map((n) => (
+                  <option key={n} value={n}>{n === 0 ? m.ops.common.no : `${num(n, locale)}${P.pctOff}`}</option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
-function StepPayout({ m, locale, app, onSave, back }: StepProps) {
+/* ---- 5: payouts ----------------------------------------------------------- */
+
+function StepPayout({ m, locale, app, onSave, onLater, back }: StepProps) {
   const P = m.ops.dw.payout;
   const [iban, setIban] = useState(app.driver.iban ? formatIban(app.driver.iban) : "SA");
-  const [bank, setBank] = useState(app.driver.bankName ?? "");
-  const [holder, setHolder] = useState(app.driver.accountHolder ?? app.driver.nameEn ?? "");
+  const savedBank = app.driver.bankName ?? "";
+  const [bank, setBank] = useState(savedBank);
+  const [bankOther, setBankOther] = useState(savedBank && !SAUDI_BANKS.some((b) => b.en === savedBank) ? savedBank : "");
+  const [holder, setHolder] = useState(app.driver.accountHolder ?? app.driver.nameEn ?? app.driver.nameAr ?? "");
   const detected = bankFromIban(iban);
   const valid = ibanValid(iban);
+  const clean = normalizeIban(iban);
+  const showError = clean.length >= 24 && !valid;
+  const bankName = bank === "Other" ? bankOther.trim() : bank;
+  const patch = (): ApplicationPatch => ({ payout: { iban: valid ? clean : null, bankName: bankName || detected?.en || "", accountHolder: holder.trim() } });
   const { busy, error, submit } = useSubmit(m, async () => {
     if (!valid) fail(errorText(m, "iban_invalid"));
+    if (!bankName) fail(m.errors.fixBelow);
     if (holder.trim().length < 3) fail(m.errors.fixBelow);
-    await onSave({ payout: { iban: normalizeIban(iban), bankName: bank || (detected ? detected.en : ""), accountHolder: holder.trim() } });
+    await onSave(patch());
   });
+  // Pick the bank from the IBAN as soon as it's recognisable
   useEffect(() => {
-    if (detected && !bank) setBank(detected.en);
-  }, [detected, bank]);
+    if (detected) setBank(detected.en);
+  }, [detected?.en]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <form onSubmit={submit} noValidate>
       <Header title={P.title} subtitle={P.subtitle} />
       <div className="space-y-5">
-        <Field label={P.iban} hint={P.ibanHint} error={iban.length > 6 && normalizeIban(iban).length >= 24 && !valid ? errorText(m, "iban_invalid") : null}>
+        <Field label={P.iban} hint={P.ibanHint} error={showError ? errorText(m, "iban_invalid") : null}>
           {(p) => (
             <div className="relative">
-              <Input {...p} dir="ltr" autoComplete="off" spellCheck={false} className="pe-12 font-mono tracking-wider rtl:text-right" value={iban} onChange={(e) => setIban(formatIban(e.target.value).slice(0, 29))} />
+              <Input
+                {...p}
+                dir="ltr"
+                autoComplete="off"
+                spellCheck={false}
+                className="pe-12 font-mono tracking-wider rtl:text-right"
+                value={iban}
+                onChange={(e) => setIban(formatIban(e.target.value).slice(0, 29))}
+              />
               {valid ? <IconCheck className="absolute end-4 top-1/2 -translate-y-1/2 text-brand-500" aria-label={P.ibanOk} /> : null}
             </div>
           )}
         </Field>
         <Field label={P.bank}>
-          {(p) => <Input {...p} value={locale === "ar" && detected && bank === detected.en ? detected.ar : bank} onChange={(e) => setBank(e.target.value)} />}
+          {(p) => (
+            <Select {...p} value={bank} onChange={(e) => setBank(e.target.value)}>
+              <option value="">{P.bankChoose}</option>
+              {SAUDI_BANKS.map((b) => (
+                <option key={b.en} value={b.en}>{locale === "ar" ? b.ar : b.en}</option>
+              ))}
+            </Select>
+          )}
         </Field>
+        {bank === "Other" ? (
+          <Field label={P.bank}>
+            {(p) => <Input {...p} maxLength={80} value={bankOther} onChange={(e) => setBankOther(e.target.value)} />}
+          </Field>
+        ) : null}
         <Field label={P.holder} hint={P.holderHint}>
           {(p) => <Input {...p} value={holder} onChange={(e) => setHolder(e.target.value)} />}
         </Field>
       </div>
       <Alert tone="info" className="mt-5">{P.demo}</Alert>
-      <Footer m={m} busy={busy} error={error} back={back} />
+      <Footer m={m} busy={busy} error={error} back={back} onLater={() => onLater(patch())} />
     </form>
   );
 }
 
-/* ---- 7: hours ------------------------------------------------------------- */
+/* ---- 6: hours ------------------------------------------------------------- */
 
-function StepHours({ m, locale, app, onSave, back }: StepProps) {
+function StepHours({ m, locale, app, onSave, onLater, back }: StepProps) {
   const H = m.ops.dw.hours;
   const [hours, setHours] = useState<HoursRow[]>(
     app.hours.length ? app.hours : [0, 1, 2, 3, 4].flatMap((d) => [{ dow: d, startMin: 360, endMin: 480 }, { dow: d, startMin: 750, endMin: 930 }]),
   );
+  const ok = hours.length > 0 && !hoursProblems(hours).length;
   const { busy, error, submit } = useSubmit(m, async () => {
     if (!hours.length) fail(errorText(m, "hours_required"));
     if (hoursProblems(hours).length) fail(H.overlap);
@@ -1003,14 +1060,14 @@ function StepHours({ m, locale, app, onSave, back }: StepProps) {
     <form onSubmit={submit} noValidate>
       <Header title={H.title} subtitle={H.subtitle} />
       <HoursEditor m={m} locale={locale} value={hours} onChange={setHours} />
-      <Footer m={m} busy={busy} error={error} back={back} />
+      <Footer m={m} busy={busy} error={error} back={back} onLater={() => onLater(ok ? { hours } : {})} />
     </form>
   );
 }
 
-/* ---- 8: review and submit ------------------------------------------------- */
+/* ---- 7: review and submit ------------------------------------------------- */
 
-function StepReview({ m, locale, app, setApp, goTo, back }: Omit<StepProps, "onSave"> & { goTo: (n: number) => void }) {
+function StepReview({ m, locale, app, setApp, goTo, back }: Omit<StepProps, "onSave" | "onLater"> & { goTo: (n: number) => void }) {
   const R = m.ops.dw.review;
   const { backend } = useAuth();
   const [agree, setAgree] = useState(false);
@@ -1077,12 +1134,12 @@ function StepReview({ m, locale, app, setApp, goTo, back }: Omit<StepProps, "onS
         </Alert>
       ) : null}
       <div className="rounded-2xl border border-[var(--line)] px-4">
-        <Row section="account">{[d.nameEn, d.nameAr].filter(Boolean).join(" · ")} {d.city ? `· ${locale === "ar" ? CITIES_AR[d.city] ?? d.city : d.city}` : ""}</Row>
+        <Row section="account">{(locale === "ar" ? d.nameAr ?? d.nameEn : d.nameEn ?? d.nameAr) ?? "—"} {d.city ? `· ${locale === "ar" ? CITIES_AR[d.city] ?? d.city : d.city}` : ""}</Row>
         <Row section="identity">{d.idNumber ? `${d.idNumber.slice(0, 1)}••••••••${d.idNumber.slice(-1)}` : "—"}</Row>
-        <Row section="licence">{d.licenceType ? m.ops.dw.licence.types[d.licenceType] : "—"}</Row>
         <Row section="vehicle">
           {v ? (
             <span className="flex flex-wrap items-center gap-2">
+              {d.licenceType ? `${m.ops.dw.licence.types[d.licenceType]} · ` : ""}
               {[v.make, v.model, v.year].filter(Boolean).join(" ")} · {t(m.ops.common.seats, { n: num(v.seats ?? 0, locale) })}
               {v.plateDigits ? <PlatePreview digits={v.plateDigits} letters={v.plateLetters ?? ""} size="sm" /> : null}
             </span>

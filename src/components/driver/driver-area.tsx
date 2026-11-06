@@ -67,6 +67,7 @@ function DriverHome({ m, locale }: { m: AppMessages; locale: Locale; onRequests:
   const A = m.ops.da;
   const { backend } = useAuth();
   const app = useLoad(() => backend.driverApplication(), [backend]);
+  const savedLater = useQueryParam("saved") === "1";
   const approved = app.data?.driver.status === "approved";
   const services = useLoad(() => (approved ? backend.driverServices() : Promise.resolve([])), [backend, approved]);
   const reqs = useLoad(() => (approved ? backend.driverBookings("requests") : Promise.resolve([])), [backend, approved]);
@@ -76,11 +77,14 @@ function DriverHome({ m, locale }: { m: AppMessages; locale: Locale; onRequests:
   if (app.error) return <ErrorNote m={m} error={app.error} />;
   if (!app.data) return <LoadingBlocks />;
   const d = app.data.driver;
-  const name = (locale === "ar" ? d.nameAr : d.nameEn)?.split(" ")[0] ?? "";
+  const name = ((locale === "ar" ? d.nameAr ?? d.nameEn : d.nameEn ?? d.nameAr) ?? "").split(" ")[0];
 
   return (
     <>
       <PageTitle title={t(A.hello, { name })} />
+      {savedLater && d.status === "draft" ? (
+        <Alert tone="success" className="mb-4">{m.ops.dw.savedLater}</Alert>
+      ) : null}
       {!approved ? (
         <ApplicationStatus m={m} locale={locale} app={app.data} compact />
       ) : (

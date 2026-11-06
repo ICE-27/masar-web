@@ -91,19 +91,32 @@ export function capacityBand(seats: number): "12" | "22" | "30" | "30+" {
 }
 
 /** SA + 22 digits, ISO 7064 mod-97 (same as public.iban_valid). */
+/**
+ * Clean whatever was typed or pasted: Arabic digits, spaces, dashes, lower
+ * case, and a repeated "SA" (the field starts with SA, people paste SA too).
+ * Plain 22 digits get the SA in front.
+ */
 export function normalizeIban(input: string): string {
-  return input
+  let s = input
     .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-    .replace(/\s+/g, "")
-    .toUpperCase();
+    .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .toUpperCase()
+    .replace(/[^0-9A-Z]/g, "");
+  while (s.startsWith("SASA")) s = s.slice(2);
+  if (/^\d{22}$/.test(s)) s = "SA" + s;
+  return s;
 }
 
+/** Saudi IBAN: SA, 2 check digits, 2-digit bank code, 18 account characters (ISO 13616, mod 97). */
 export function ibanValid(input: string): boolean {
   const iban = normalizeIban(input);
-  if (!/^SA\d{22}$/.test(iban)) return false;
-  const s = iban.slice(4) + "2810" + iban.slice(2, 4);
+  if (!/^SA\d{4}[0-9A-Z]{18}$/.test(iban)) return false;
+  const s = iban.slice(4) + iban.slice(0, 4);
   let r = 0;
-  for (const ch of s) r = (r * 10 + Number(ch)) % 97;
+  for (const ch of s) {
+    const v = /\d/.test(ch) ? ch : String(ch.charCodeAt(0) - 55);
+    for (const d of v) r = (r * 10 + Number(d)) % 97;
+  }
   return r === 1;
 }
 
@@ -111,27 +124,56 @@ export function formatIban(input: string): string {
   return normalizeIban(input).replace(/(.{4})/g, "$1 ").trim();
 }
 
-/** Saudi bank codes (IBAN digits 5-6). */
-const BANKS: Record<string, { en: string; ar: string }> = {
-  "10": { en: "Saudi National Bank", ar: "البنك الأهلي السعودي" },
-  "15": { en: "Bank Albilad", ar: "بنك البلاد" },
-  "20": { en: "Riyad Bank", ar: "بنك الرياض" },
-  "30": { en: "Arab National Bank", ar: "البنك العربي الوطني" },
-  "40": { en: "Saudi Awwal Bank (SAB)", ar: "البنك السعودي الأول" },
-  "45": { en: "Saudi Awwal Bank (SAB)", ar: "البنك السعودي الأول" },
-  "50": { en: "Alawwal (SAB)", ar: "البنك السعودي الأول" },
-  "55": { en: "Banque Saudi Fransi", ar: "البنك السعودي الفرنسي" },
-  "60": { en: "Bank AlJazira", ar: "بنك الجزيرة" },
-  "65": { en: "Saudi Investment Bank", ar: "البنك السعودي للاستثمار" },
-  "80": { en: "Al Rajhi Bank", ar: "مصرف الراجحي" },
-  "05": { en: "Alinma Bank", ar: "مصرف الإنماء" },
-  "90": { en: "Gulf International Bank", ar: "بنك الخليج الدولي" },
-};
+/** Banks operating in Saudi Arabia, with their IBAN bank code (digits 5-6) where known. */
+export const SAUDI_BANKS: { code: string | null; en: string; ar: string }[] = [
+  { code: "80", en: "Al Rajhi Bank", ar: "مصرف الراجحي" },
+  { code: "10", en: "Saudi National Bank (SNB)", ar: "البنك الأهلي السعودي" },
+  { code: "20", en: "Riyad Bank", ar: "بنك الرياض" },
+  { code: "45", en: "Saudi Awwal Bank (SAB)", ar: "البنك السعودي الأول" },
+  { code: "05", en: "Alinma Bank", ar: "مصرف الإنماء" },
+  { code: "55", en: "Banque Saudi Fransi", ar: "البنك السعودي الفرنسي" },
+  { code: "30", en: "Arab National Bank", ar: "البنك العربي الوطني" },
+  { code: "15", en: "Bank Albilad", ar: "بنك البلاد" },
+  { code: "60", en: "Bank AlJazira", ar: "بنك الجزيرة" },
+  { code: "65", en: "Saudi Investment Bank", ar: "البنك السعودي للاستثمار" },
+  { code: "90", en: "Gulf International Bank (meem)", ar: "بنك الخليج الدولي (ميم)" },
+  { code: null, en: "STC Bank", ar: "بنك إس تي سي" },
+  { code: null, en: "D360 Bank", ar: "بنك دال ٣٦٠" },
+  { code: null, en: "Emirates NBD", ar: "بنك الإمارات دبي الوطني" },
+  { code: null, en: "Bank Muscat", ar: "بنك مسقط" },
+  { code: null, en: "National Bank of Bahrain", ar: "بنك البحرين الوطني" },
+  { code: null, en: "National Bank of Kuwait", ar: "بنك الكويت الوطني" },
+  { code: null, en: "First Abu Dhabi Bank", ar: "بنك أبوظبي الأول" },
+  { code: null, en: "J.P. Morgan", ar: "جي بي مورقان" },
+  { code: null, en: "Other", ar: "أخرى" },
+];
+const BANK_ALIASES: Record<string, string> = { "40": "45", "50": "45" };
 
 export function bankFromIban(input: string): { en: string; ar: string } | null {
   const iban = normalizeIban(input);
   if (!/^SA\d{4}/.test(iban)) return null;
-  return BANKS[iban.slice(4, 6)] ?? null;
+  const code = iban.slice(4, 6);
+  return SAUDI_BANKS.find((b) => b.code === (BANK_ALIASES[code] ?? code)) ?? null;
+}
+
+const SUV = /land cruiser|prado|fortuner|rav4|highlander|sequoia|4runner|patrol|x-trail|pathfinder|tahoe|suburban|yukon|terrain|acadia|tucson|santa fe|palisade|creta|sportage|sorento|seltos|telluride|explorer|expedition|edge|captiva|traverse|cr-v|pilot|cx-|rx|gx|lx|asx|outlander|pajero|montero|cherokee|durango|kodiaq|tiguan|touareg|x5|x3|q5|q7|gle|glc/i;
+const VAN = /hiace|sienna|odyssey|carnival|staria|h-1|starex|previa|innova|pacifica|caravan|quest|v-class|vito|transit/i;
+
+/** A car's category follows from its model; anything unknown counts as a sedan. */
+export function carCategoryFor(model: string | null | undefined): CarCategory {
+  const m = model ?? "";
+  if (VAN.test(m)) return "van";
+  if (SUV.test(m)) return "suv";
+  return "sedan";
+}
+
+/** A bus's size class follows from its seats. */
+export function busTypeFor(seats: number | null | undefined): BusType {
+  const n = seats ?? 0;
+  if (n <= 15) return "minivan";
+  if (n <= 30) return "coaster";
+  if (n <= 45) return "midsize";
+  return "fullsize";
 }
 
 /** National ID starts with 1, Iqama with 2; both are 10 digits. */

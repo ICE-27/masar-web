@@ -54,6 +54,7 @@ export interface DriverRecord {
   languages: string[];
   yearsExperience: number | null;
   idNumber: string | null;
+  idIssued: string | null;
   idExpiry: string | null;
   policeIssued: string | null;
   licenceNumber: string | null;
@@ -92,6 +93,7 @@ export interface Vehicle {
   wheelchair: boolean;
   plateDigits?: string | null;
   plateLetters?: string | null;
+  otherFeatures?: string | null;
 }
 
 export interface HoursRow {
@@ -115,21 +117,21 @@ export interface DriverApplication {
 export interface ApplicationPatch {
   step?: number;
   personal?: {
-    nameAr: string;
-    nameEn: string;
-    gender: "male" | "female";
-    dateOfBirth: string;
-    nationality: string;
-    city: string;
+    nameAr: string | null;
+    nameEn: string | null;
+    gender: "male" | "female" | null;
+    dateOfBirth: string | null;
+    nationality: string | null;
+    city: string | null;
     bio?: string;
     languages?: string[];
     yearsExperience?: number | null;
   };
-  identity?: { idNumber: string; idExpiry: string; policeIssued: string };
-  licence?: { licenceNumber: string; licenceType: "private" | "public" | "heavy"; licenceExpiry: string };
+  identity?: { idNumber: string | null; idIssued: string | null; idExpiry: string | null; policeIssued: string | null };
+  licence?: { licenceNumber: string | null; licenceType: "private" | "public" | "heavy" | null; licenceExpiry: string | null };
   vehicle?: Omit<Vehicle, "plateDigits" | "plateLetters"> & { plateDigits: string; plateLetters: string };
   pricing?: { types: PriceRowState[]; discountT1Pct: number; discountT2Pct: number };
-  payout?: { bankName: string; iban: string; accountHolder: string };
+  payout?: { bankName: string; iban: string | null; accountHolder: string };
   hours?: HoursRow[];
 }
 
@@ -238,8 +240,8 @@ export interface ServiceInput {
   distanceM: number | null;
   durationS: number | null;
   accepts: ServiceRecord["accepts"];
-  ageMin: number;
-  ageMax: number;
+  ageMin?: number;
+  ageMax?: number;
   maxChildrenPerFamily: number;
   sharedEnabled: boolean;
   exclusiveEnabled: boolean;
