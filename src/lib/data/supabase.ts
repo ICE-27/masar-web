@@ -3,6 +3,8 @@ import type {
   Address,
   AddressInput,
   Backend,
+  DocKind,
+  DriverApplication,
   Child,
   ChildInput,
   Consent,
@@ -11,7 +13,7 @@ import type {
   Profile,
   ProfilePatch,
 } from "./types";
-import { DataError } from "./types";
+import { DataError, MEDIA_KINDS } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- rows are mapped explicitly below */
 
@@ -36,6 +38,9 @@ function mapError(error: any): DataError {
   const code = String(error.code ?? "");
   const known = KNOWN.find((k) => msg === k || msg.startsWith(`${k}`));
   if (known) return new DataError(known, error.details ?? undefined);
+  // Every rule in the database raises its own short code (P0001), e.g.
+  // "no_seats", "schedule_conflict"; details carry the specifics.
+  if (code === "P0001" && /^[a-z_]+$/.test(msg)) return new DataError(msg, error.details ?? undefined);
 
   switch (code) {
     case "invalid_credentials":
@@ -177,6 +182,11 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
     return result.data;
   }
 
+  /** Call a database function; its JSON comes back in the app's own shape. */
+  function rpc<T = any>(name: string, args?: Record<string, unknown>): Promise<T> {
+    return run<T>(sb.rpc(name, args ?? {}));
+  }
+
   return {
     mode: "supabase",
 
@@ -193,12 +203,12 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
       return () => data.subscription.unsubscribe();
     },
 
-    async signUp({ email, password, fullName, locale }) {
+    async signUp({ email, password, fullName, locale, role }) {
       const data = await run(
         sb.auth.signUp({
           email: email.trim().toLowerCase(),
           password,
-          options: { data: { full_name: fullName.trim(), locale, role: "parent" } },
+          options: { data: { full_name: fullName.trim(), locale, role: role === "driver" ? "driver" : "parent" } },
         }),
       );
       // With "Confirm email" on, Supabase hides existing accounts behind an
@@ -254,11 +264,33 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
     },
 
     async requestPhoneOtp(phone) {
+      // Through our own API route, which can also send the code by WhatsApp.
+      // If the route isn't there (static preview), ask the database directly.
+      const { data: sess } = await sb.auth.getSession();
+      const token = sess.session?.access_token;
+      if (token && typeof window !== "undefined") {
+        let res: Response | null = null;
+        try {
+          res = await fetch("/api/send-otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ phone }),
+          });
+        } catch {
+          res = null;
+        }
+        if (res && res.status !== 404 && res.status !== 501 && res.status !== 405) {
+          const r: any = await res.json().catch(() => ({}));
+          if (!res.ok) throw mapError(r);
+          return { expiresAt: r.expires_at, cooldownSeconds: r.cooldown_seconds, demoCode: r.demo_code ?? null, channel: r.channel };
+        }
+      }
       const r: any = await run(sb.rpc("request_phone_otp", { p_phone: phone }));
       return {
         expiresAt: r.expires_at,
         cooldownSeconds: r.cooldown_seconds,
         demoCode: r.demo_code ?? null,
+        channel: "screen" as const,
       };
     },
 
@@ -321,6 +353,185 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
     async deleteAccount() {
       await run(sb.rpc("delete_my_account"));
       await sb.auth.signOut();
+    },
+
+    /* ---- Drivers, services, bookings, money (Milestones 3-6) ---------- */
+
+    async driverApplication() {
+      return rpc<DriverApplication>("driver_get_application");
+    },
+    async saveApplication(patch) {
+      return rpc<DriverApplication>("driver_save_application", { p: patch });
+    },
+    async uploadDocument(kind: DocKind, file: Blob, expiry: string | null) {
+      const u = await uid();
+      const media = MEDIA_KINDS.includes(kind);
+      const bucket = media ? "driver-media" : "driver-docs";
+      const ext = file.type === "application/pdf" ? "pdf" : file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+      const path = `${u.id}/${kind}-${Date.now()}.${ext}`;
+      const { error } = await sb.storage.from(bucket).upload(path, file, { contentType: file.type || "image/jpeg", upsert: true });
+      if (error) {
+        const m = String((error as { message?: string }).message ?? "");
+        if (/size|large/i.test(m)) throw new DataError("file_too_large");
+        if (/mime|type/i.test(m)) throw new DataError("file_type");
+        throw mapError(error);
+      }
+      return rpc<DriverApplication>("driver_save_document", { p_kind: kind, p_bucket: bucket, p_path: path, p_expiry: expiry });
+    },
+    async updateDocumentExpiry(doc, expiry) {
+      return rpc<DriverApplication>("driver_save_document", { p_kind: doc.kind, p_bucket: doc.bucket, p_path: doc.path, p_expiry: expiry });
+    },
+    async submitApplication() {
+      return rpc<DriverApplication>("driver_submit");
+    },
+    async fileUrl(doc) {
+      if (doc.bucket === "demo" || doc.path.startsWith("/")) return doc.path;
+      if (doc.bucket === "driver-media") return sb.storage.from(doc.bucket).getPublicUrl(doc.path).data.publicUrl;
+      const { data, error } = await sb.storage.from(doc.bucket).createSignedUrl(doc.path, 300);
+      if (error) return null;
+      return data.signedUrl;
+    },
+    mediaUrl(path) {
+      if (!path) return null;
+      if (path.startsWith("/")) return path;
+      const [bucket, ...rest] = path.split("/");
+      return sb.storage.from(bucket).getPublicUrl(rest.join("/")).data.publicUrl;
+    },
+
+    async notifications() {
+      return rpc("my_notifications");
+    },
+    async markNotificationsRead() {
+      await rpc("mark_notifications_read");
+    },
+
+    async driverServices() {
+      return rpc("driver_services");
+    },
+    async driverService(id) {
+      return rpc("driver_get_service", { p_id: id });
+    },
+    async saveService(input, applyFrom) {
+      return rpc("driver_save_service", { p: input, p_from: applyFrom ?? null });
+    },
+    async checkService(id, schedule, applyFrom) {
+      return rpc("driver_check_service", { p_service: id, p_schedule: schedule, p_from: applyFrom ?? null });
+    },
+    async archiveService(id) {
+      await rpc("driver_archive_service", { p_service: id });
+    },
+    async addDestination(input) {
+      return rpc("add_destination", { p: input });
+    },
+    async listDestinationsGeo() {
+      const rows = await run(sb.from("destinations").select("id, name_en, name_ar, city, kind, lat, lng").order("name_en"));
+      return (rows ?? []).map((r: any) => ({ id: r.id, nameEn: r.name_en, nameAr: r.name_ar, city: r.city, kind: r.kind, lat: r.lat, lng: r.lng }));
+    },
+    async listDistricts() {
+      const rows = await run(sb.from("districts").select("id, city, name_en, name_ar, lat, lng").order("city"));
+      return (rows ?? []).map((r: any) => ({ id: r.id, city: r.city, nameEn: r.name_en, nameAr: r.name_ar, lat: r.lat, lng: r.lng }));
+    },
+    async checkHours(hours, applyFrom) {
+      return rpc("driver_check_hours", { p_hours: hours, p_from: applyFrom ?? null });
+    },
+    async saveHours(hours, applyFrom) {
+      return rpc("driver_save_hours", { p_hours: hours, p_from: applyFrom ?? null });
+    },
+    async blockedDates() {
+      return rpc("driver_blocked_dates");
+    },
+    async blockDates(start, end, reason, cancelConfirmed) {
+      return rpc("driver_block_dates", { p_start: start, p_end: end, p_reason: reason, p_cancel_confirmed: cancelConfirmed });
+    },
+    async unblock(id) {
+      return rpc("driver_unblock", { p_id: id });
+    },
+    async setDay(serviceId, date, seats, unavailable, reason, cancelConfirmed) {
+      return rpc("driver_set_day", {
+        p_service: serviceId,
+        p_date: date,
+        p_seats: seats,
+        p_unavailable: unavailable,
+        p_reason: reason,
+        p_cancel_confirmed: cancelConfirmed,
+      });
+    },
+    async driverCalendar(from, to) {
+      return rpc("driver_calendar", { p_from: from, p_to: to });
+    },
+
+    async searchServices(params) {
+      return rpc("search_services", { p: params ?? {} });
+    },
+    async getService(id) {
+      return rpc("get_service", { p_id: id });
+    },
+    async quoteBooking(input) {
+      return rpc("quote_booking", { p: input });
+    },
+    async createBooking(input) {
+      return rpc("create_booking", { p: input });
+    },
+    async getBooking(id) {
+      return rpc("get_booking", { p_id: id });
+    },
+    async myBookings() {
+      return rpc("my_bookings");
+    },
+    async driverBookings(kind) {
+      return rpc("driver_bookings", { p_kind: kind });
+    },
+    async respond(id, accept, reason) {
+      return rpc("driver_respond", { p_booking: id, p_accept: accept, p_reason: reason ?? null });
+    },
+    async payBooking(input) {
+      return rpc("pay_booking", { p: input });
+    },
+    async cancelPreview(id) {
+      return rpc("cancel_preview", { p_booking: id });
+    },
+    async cancelBooking(id, reason, refundTo) {
+      return rpc("cancel_booking", { p_booking: id, p_reason: reason, p_refund_to: refundTo });
+    },
+    async wallet() {
+      return rpc("wallet_summary");
+    },
+    async invoice(id) {
+      return rpc("get_invoice", { p_id: id });
+    },
+    async earnings() {
+      return rpc("driver_earnings");
+    },
+
+    async adminOverview() {
+      return rpc("admin_overview");
+    },
+    async adminDriverQueue() {
+      return rpc("admin_driver_queue");
+    },
+    async adminDriver(id) {
+      return rpc("admin_get_driver", { p_id: id });
+    },
+    async reviewDocument(docId, approve, reason) {
+      return rpc("admin_review_document", { p_doc: docId, p_approve: approve, p_reason: reason });
+    },
+    async decideDriver(id, decision, note) {
+      return rpc("admin_decide_driver", { p_driver: id, p_decision: decision, p_note: note });
+    },
+    async adminBookings() {
+      return rpc("admin_bookings");
+    },
+    async adminSettings() {
+      return rpc("admin_settings");
+    },
+    async saveSettings(p) {
+      return rpc("admin_save_settings", { p });
+    },
+    async payoutRun() {
+      return rpc("admin_payout_run");
+    },
+    async payoutRuns() {
+      return rpc("admin_payout_runs");
     },
   };
 }

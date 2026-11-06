@@ -48,34 +48,14 @@ export function PhoneVerify({
   async function send(target: string) {
     setError(null);
     setBusy(true);
-    setWhatsappSent(false);
     try {
       const r = await backend.requestPhoneOtp(target);
       setSentTo(target);
+      setDemoCode(r.demoCode);
+      setWhatsappSent(r.channel === "whatsapp");
       setCooldown(r.cooldownSeconds);
       setCode("");
       setStage("code");
-
-      // Try to send the code via WhatsApp
-      if (r.demoCode) {
-        try {
-          const wa = await fetch("/api/send-otp", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone: target, code: r.demoCode }),
-          });
-          const waRes = await wa.json();
-          if (waRes.sent) {
-            setWhatsappSent(true);
-            setDemoCode(null); // hide on-screen code when WhatsApp works
-          } else {
-            setDemoCode(r.demoCode); // fallback: show on screen
-          }
-        } catch {
-          setDemoCode(r.demoCode); // fallback: show on screen
-        }
-      }
-
       setTimeout(() => codeRef.current?.focus(), 50);
     } catch (e) {
       if (e instanceof DataError && e.code === "otp_cooldown") setCooldown(Number(e.detail) || 30);

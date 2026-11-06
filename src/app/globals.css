@@ -254,3 +254,18 @@
 .masar-dark-tiles {
   filter: brightness(0.7) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
 }
+
+/* ---- Checkout success, print ---- */
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  80% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[pop"] { animation: none !important; }
+}
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .print-sheet { box-shadow: none !important; border: 0 !important; margin: 0 !important; padding: 0 !important; }
+}

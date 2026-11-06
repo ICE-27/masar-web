@@ -154,3 +154,92 @@ export const IconSpinner = ({ className = "", ...p }: P) => (
     <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
   </svg>
 );
+export const IconBus = (p: P) => (
+  <Base {...p}>
+    <rect x="4" y="3.5" width="16" height="14" rx="3" />
+    <path d="M4 11h16M8 21v-3.5M16 21v-3.5" />
+    <circle cx="8" cy="14.3" r=".8" fill="currentColor" />
+    <circle cx="16" cy="14.3" r=".8" fill="currentColor" />
+  </Base>
+);
+export const IconCar = (p: P) => (
+  <Base {...p}>
+    <path d="M5 16.5V12l1.8-4.6A2 2 0 0 1 8.7 6h6.6a2 2 0 0 1 1.9 1.4L19 12v4.5" />
+    <path d="M3.5 12h17v4.5h-17z" />
+    <path d="M6.5 16.5V19M17.5 16.5V19" />
+  </Base>
+);
+export const IconCalendar = (p: P) => (
+  <Base {...p}>
+    <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+    <path d="M3.5 10h17M8 3v4M16 3v4" />
+  </Base>
+);
+export const IconWallet = (p: P) => (
+  <Base {...p}>
+    <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" />
+    <rect x="4" y="8" width="16.5" height="11.5" rx="2.5" />
+    <path d="M16 13.8h1.5" />
+  </Base>
+);
+export const IconInbox = (p: P) => (
+  <Base {...p}>
+    <path d="M4 13.5 6.5 5h11l2.5 8.5V19H4z" />
+    <path d="M4 13.5h4.5l1 2h5l1-2H20" />
+  </Base>
+);
+export const IconBell = (p: P) => (
+  <Base {...p}>
+    <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z" />
+    <path d="M10 20.5a2.2 2.2 0 0 0 4 0" />
+  </Base>
+);
+export const IconClock = (p: P) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </Base>
+);
+export const IconRoute = (p: P) => (
+  <Base {...p}>
+    <circle cx="6" cy="18" r="2.2" />
+    <circle cx="18" cy="6" r="2.2" />
+    <path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8" />
+  </Base>
+);
+export const IconMoney = (p: P) => (
+  <Base {...p}>
+    <rect x="3" y="6.5" width="18" height="11" rx="2" />
+    <circle cx="12" cy="12" r="2.6" />
+    <path d="M6.5 9.5v5M17.5 9.5v5" />
+  </Base>
+);
+export const IconSettings = (p: P) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2.8v2.4M12 18.8v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7" />
+  </Base>
+);
+export const IconChart = (p: P) => (
+  <Base {...p}>
+    <path d="M4 20V4M4 20h16" />
+    <path d="M8 16v-4M12 16V8M16 16v-6" />
+  </Base>
+);
+export const IconFile = (p: P) => (
+  <Base {...p}>
+    <path d="M6 3.5h8l4 4V20.5H6z" />
+    <path d="M14 3.5V8h4M9 12.5h6M9 16h6" />
+  </Base>
+);
+export const IconCard = (p: P) => (
+  <Base {...p}>
+    <rect x="3" y="5.5" width="18" height="13" rx="2.5" />
+    <path d="M3 10h18M7 15h3" />
+  </Base>
+);
+export const IconStar = (p: P) => (
+  <Base {...p}>
+    <path d="m12 3.8 2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8z" />
+  </Base>
+);

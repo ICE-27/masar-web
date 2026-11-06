@@ -31,7 +31,7 @@ export function SiteFooter({ locale, m }: { locale: Locale; m: Messages }) {
   ];
 
   return (
-    <footer className="border-t border-[var(--line)] bg-subtle">
+    <footer className="no-print border-t border-[var(--line)] bg-subtle">
       <div className="container-page py-14">
         <div className="grid gap-10 md:grid-cols-[1.6fr_repeat(3,1fr)]">
           <div className="max-w-xs">

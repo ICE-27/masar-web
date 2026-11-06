@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const STATIC = process.env.NEXT_PUBLIC_STATIC_EXPORT === "1";
 
@@ -51,6 +51,25 @@ export function getQueryParam(name: string): string | null {
 
 /** Only allow in-site redirects like /en/account, never another domain. */
 export function safeNext(value: string | null, fallback: string): string {
-  if (value && /^\/(ar|en)(\/[\w\-/]*)?$/.test(value)) return value;
+  if (value && /^\/(ar|en)(\/[\w\-/]*)?(\?[\w\-=&%.]*)?$/.test(value)) return value;
   return fallback;
+}
+
+/**
+ * A query parameter, read after the page has mounted.
+ *
+ * During a client-side navigation the new page renders before the address
+ * bar changes, so reading window.location while rendering can return the
+ * previous page's query. Effects run after the URL is committed, so this is
+ * reliable. `undefined` means "not read yet"; `null` means "not present".
+ */
+export function useQueryParam(name: string): string | null | undefined {
+  const [value, setValue] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    const read = () => setValue(getQueryParam(name));
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, [name]);
+  return value;
 }

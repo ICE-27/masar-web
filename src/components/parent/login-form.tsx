@@ -24,8 +24,17 @@ export function LoginForm({ locale, m }: { locale: Locale; m: AppMessages }) {
   // Already signed in: go straight on
   useEffect(() => {
     if (status !== "signed-in" || !profile) return;
+    const next = getQueryParam("next");
+    if (profile.role === "driver") {
+      navigate(safeNext(next && next.includes("/driver") ? next : null, href(locale, "/driver")), { replace: true });
+      return;
+    }
+    if (profile.role === "admin") {
+      navigate(safeNext(next, href(locale, "/admin")), { replace: true });
+      return;
+    }
     const fallback = profile.onboardingCompletedAt ? href(locale, "/account") : href(locale, "/signup");
-    navigate(profile.onboardingCompletedAt ? safeNext(getQueryParam("next"), fallback) : fallback, { replace: true });
+    navigate(profile.onboardingCompletedAt ? safeNext(next, fallback) : fallback, { replace: true });
   }, [status, profile, locale, navigate]);
 
   async function onSubmit(e: FormEvent) {
@@ -107,7 +116,11 @@ export function LoginForm({ locale, m }: { locale: Locale; m: AppMessages }) {
             </Link>
           </div>
         </div>
-        <p className="mt-5 text-center text-xs text-muted">{A.driverNote}</p>
+        <p className="mt-5 text-center text-xs text-muted">
+          <Link href={href(locale, "/driver/join")} className="underline underline-offset-4 hover:text-[var(--ink)]">
+            {A.driverNote}
+          </Link>
+        </p>
       </div>
     </div>
   );

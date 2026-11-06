@@ -99,7 +99,10 @@ export function ParentWizard({ locale, m }: { locale: Locale; m: AppMessages }) 
   if (profile && profile.role !== "parent") {
     return (
       <Shell m={m} locale={locale} step={1} wide={false}>
-        <Alert tone="info">{m.auth.driverNote}</Alert>
+        <Alert tone="info">{m.ops.dw.parentAccount}</Alert>
+        <ButtonLink href={href(locale, profile.role === "driver" ? "/driver" : "/admin")} className="mt-4">
+          {m.common.continue}
+        </ButtonLink>
       </Shell>
     );
   }
@@ -230,11 +233,23 @@ type AccountForm = {
   whatsapp: boolean;
 };
 
-function StepAccount({ m, locale }: { m: AppMessages; locale: Locale }) {
+export function StepAccount({
+  m,
+  locale,
+  role = "parent",
+  title,
+  subtitle,
+}: {
+  m: AppMessages;
+  locale: Locale;
+  role?: "parent" | "driver";
+  title?: string;
+  subtitle?: string;
+}) {
   const A = m.wizard.account;
   const { backend, refresh } = useAuth();
   const navigate = useNavigate();
-  const [draft, setDraft, clearDraft] = useDraft<Omit<AccountForm, "password">>("masar-draft-account", {
+  const [draft, setDraft, clearDraft] = useDraft<Omit<AccountForm, "password">>(`masar-draft-account-${role}`, {
     fullName: "",
     email: "",
     language: locale,
@@ -282,6 +297,7 @@ function StepAccount({ m, locale }: { m: AppMessages; locale: Locale }) {
         password,
         fullName: parsed.data.fullName,
         locale: draft.language,
+        role,
       });
       clearDraft();
       if (r.needsEmailConfirmation) {
@@ -295,7 +311,7 @@ function StepAccount({ m, locale }: { m: AppMessages; locale: Locale }) {
       }
       await backend.recordConsents(consents);
       await refresh();
-      if (draft.language !== locale) navigate(href(draft.language, "/signup"), { replace: true });
+      if (draft.language !== locale) navigate(href(draft.language, role === "driver" ? "/driver/join" : "/signup"), { replace: true });
     } catch (err) {
       setSubmitError(errorText(m, err));
     } finally {
@@ -320,14 +336,14 @@ function StepAccount({ m, locale }: { m: AppMessages; locale: Locale }) {
 
   return (
     <>
-      <StepHeader title={A.title} subtitle={A.subtitle} />
+      <StepHeader title={title ?? A.title} subtitle={subtitle ?? A.subtitle} />
       {backend.mode === "local" ? (
         <Alert tone="info" className="mb-6">
           {m.common.demoStore}
         </Alert>
       ) : null}
       <form onSubmit={onSubmit} noValidate className="space-y-5">
-        <Field label={A.fullName} hint={A.fullNameHint} error={err("fullName")}>
+        <Field label={A.fullName} hint={role === "driver" ? A.fullNameHintDriver : A.fullNameHint} error={err("fullName")}>
           {(p) => (
             <Input {...p} invalid={p.invalid} autoComplete="name" value={draft.fullName} onChange={(e) => set("fullName", e.target.value)} />
           )}
@@ -387,10 +403,10 @@ function StepAccount({ m, locale }: { m: AppMessages; locale: Locale }) {
             <Link href={href(locale, "/privacy")} target="_blank" className="font-medium text-brand-600 underline underline-offset-4 dark:text-brand-300">
               {A.privacy}
             </Link>{" "}
-            {A.privacyAfter}
+            {role === "driver" ? A.privacyAfterDriver : A.privacyAfter}
           </Checkbox>
-          <Checkbox checked={draft.whatsapp} onChange={(v) => set("whatsapp", v)} hint={A.whatsappHint}>
-            {A.whatsapp}
+          <Checkbox checked={draft.whatsapp} onChange={(v) => set("whatsapp", v)} hint={role === "driver" ? A.whatsappHintDriver : A.whatsappHint}>
+            {role === "driver" ? A.whatsappDriver : A.whatsapp}
           </Checkbox>
         </fieldset>
 

@@ -1,4 +1,5 @@
 import type { Locale } from "@/lib/i18n";
+import type { OpsBackend } from "./ops-types";
 
 export type Role = "parent" | "driver" | "admin";
 export type OnboardingStep = 1 | 2 | 3 | 4;
@@ -105,6 +106,8 @@ export interface OtpRequest {
   cooldownSeconds: number;
   /** Shown on screen while demo mode is on. Later it goes out over WhatsApp. */
   demoCode: string | null;
+  /** "whatsapp" when the code was also sent to the user's WhatsApp. */
+  channel?: "whatsapp" | "screen";
 }
 
 export interface OtpResult {
@@ -135,7 +138,10 @@ export type DataErrorCode =
   | "child_limit"
   | "dob_in_future"
   | "network"
-  | "unknown";
+  | "needs_supabase"
+  | "unknown"
+  // Codes raised by the database functions (driver, booking, payment rules)
+  | (string & {});
 
 export class DataError extends Error {
   constructor(
@@ -152,9 +158,10 @@ export interface SignUpInput {
   password: string;
   fullName: string;
   locale: Locale;
+  role?: "parent" | "driver";
 }
 
-export interface Backend {
+export interface Backend extends OpsBackend {
   /** "supabase" when the env vars are set; "local" keeps everything in this browser. */
   readonly mode: "supabase" | "local";
 
@@ -185,3 +192,5 @@ export interface Backend {
 
   deleteAccount(): Promise<void>;
 }
+
+export * from "./ops-types";

@@ -81,6 +81,41 @@ geocoding. No API key and no cost. The provider sits behind one interface in
   the same rules as the SQL (code cooldowns, one verified account per number,
   one default address…), so the shareable preview works with no server at all.
 
+## Milestones 3 to 6 — drivers, services, booking and payments
+
+**Milestone 3 — driver onboarding and verification.** `/driver/join` is an
+8-step application (account and mobile, identity, licence, vehicle, prices,
+payout IBAN, working hours, review). Documents go to a **private** storage
+bucket and are shown to admins only through short-lived signed links. Admins
+review each document in `/admin/drivers` and approve, ask for changes or
+suspend. The driver is notified at every step.
+
+**Milestone 4 — services, working hours and the conflict engine.** Approved
+drivers draw a route on the map (`/driver/services`), tick pick-up districts
+(with optional surcharges), set days, times, seats and prices. Schedules are
+versioned: a change that would break confirmed trips is blocked and the driver
+is offered "apply from the earliest safe date". Days off on dates with
+confirmed trips cancel those trips and refund the parents in full.
+
+**Milestone 5 — search, booking and seat holds.** `/search` matches homes to
+routes (distance to the path, detour, stops, journey time, seats, gender and
+age) and shows near misses separately. The booking wizard supports every week,
+picked dates or one day, and the server quotes the price. The driver accepts or
+declines in `/driver/requests`; seats are held per date while the parent pays,
+and overselling is impossible (one database row per seat per date, under a lock).
+
+**Milestone 6 — simulated payments.** `/checkout` takes mada, Visa/Mastercard,
+Apple Pay, STC Pay or the Masar Wallet. **No real money moves**: demo cards
+are listed on the page (success, declined, insufficient funds, timeout), with a
+3-D Secure code step. Every payment writes a balanced double-entry ledger,
+issues a bilingual tax invoice (`/invoice`), and supports cancellation refunds
+(days beyond the 7-day notice are refunded; the Masar fee is kept unless the
+driver cancels). Admins run driver payouts in `/admin/payouts` (CSV, demo).
+
+Price = days × daily rate × children (or per vehicle) − long-term discount,
+then VAT 15% on the driver's price and the Masar fee 10% added on top. Money is
+stored in halalas, so there is no rounding drift.
+
 ## Setting up Supabase (once)
 
 1. Supabase → **SQL Editor** → **New query**. Paste all of
@@ -96,6 +131,20 @@ geocoding. No API key and no cost. The provider sits behind one interface in
 4. Vercel → your project → **Settings → Environment Variables**: add
    `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for
    Production and Preview, then **Deployments → … → Redeploy**.
+
+5. **Milestones 3–6:** SQL Editor → New query → paste all of
+   `supabase/migrations/0002_drivers_services_bookings.sql` → **Run**.
+   Then run, in a new query (choose your own demo password):
+
+   ```sql
+   select public.seed_demo('Masar-Demo-2026');
+   select public.make_admin('you@example.com');  -- your own sign-up email
+   ```
+
+   The seed creates `admin@ksamasar.com`, `parent@ksamasar.com`,
+   `driver.bus@ksamasar.com`, `driver.car@ksamasar.com`,
+   `pending.driver@ksamasar.com` and 8 more drivers, all with that password.
+   It is safe to run again.
 
 For local development, copy `.env.example` to `.env.local` and fill in the key.
 
@@ -209,6 +258,9 @@ in-browser demo store.
 | `NEXT_PUBLIC_SITE_URL` | Canonical URL for metadata. Defaults to `https://www.ksamasar.com`. |
 | `STATIC_EXPORT` | Set to `1` to build a static site into `./out`. |
 | `NEXT_PUBLIC_STATIC_EXPORT` | Set with the above so links render as plain `<a>`. |
+| `TWILIO_ACCOUNT_SID` | Optional, **server only**. Sends verification codes on WhatsApp. |
+| `TWILIO_AUTH_TOKEN` | Optional, **server only**. Never prefix with `NEXT_PUBLIC_`. |
+| `TWILIO_WHATSAPP_FROM` | Optional. The Twilio WhatsApp sender, e.g. `+14155238886`. |
 
 ## Deploying to Vercel
 
@@ -235,6 +287,22 @@ touch targets, and `prefers-reduced-motion` respected.
 5. **Find a ride** opens the account. Show children, addresses (add a second
    one and make it the default) and the profile's consent history.
 
+## How to demo Milestones 3–6 (about 5 minutes)
+
+1. **Parent:** sign in as `parent@ksamasar.com` → **Find a ride** → open
+   *Dammam → Al Ettifaq Club (evenings)* → **Book this service** → choose
+   Layan → pick 2 weeks → **Send request**.
+2. **Driver** (another browser or a private window): `driver.bus@ksamasar.com`
+   → **Requests** → **Accept**.
+3. **Parent:** **Pay now**. Try card `4000 0000 0000 0002` (declined), then
+   mada `4464 0400 0000 0007`; enter the code shown in the 3-D Secure box.
+   Open the receipt, then **Wallet**.
+4. **Cancel** the booking: the preview shows what is refunded and what is kept.
+5. **New driver:** sign out → `/driver/join` → complete the 8 steps (any
+   image works as a document) → **Submit**.
+6. **Admin:** `admin@ksamasar.com` → **Drivers** → approve each document →
+   **Approve driver**. The new driver can now publish a service.
+
 ## Known issues
 
 - On some page loads the browser console shows *Minified React error #418*.
@@ -245,8 +313,5 @@ touch targets, and `prefers-reduced-motion` respected.
 
 ## Still to come
 
-Milestones 3 to 11 from the build brief: driver registration and verification,
-services and working hours with the conflict engine, search and flexible
-booking, the simulated checkout, live trip tracking, notifications, unmet
-demand, disputes, dashboards and the demo kit. Child photos arrive with
-Milestone 3, which adds private file storage for driver documents.
+Milestones 7 to 11 from the build brief: live trip tracking, the full
+notification centre, unmet demand, disputes, dashboards and the demo kit.

@@ -23,7 +23,7 @@ insert into children (full_name, gender, date_of_birth) values ('X','boy','2017-
 select 'T6 children: '||count(*) from children;
 select 'T7 otp: '|| (request_phone_otp('+966512345678') ? 'demo_code');
 select request_phone_otp('+966512345678');  -- cooldown
-select 'T8 wrong: '||verify_phone_otp('000000-wrong');
+select 'T8 wrong: '||verify_phone_otp('000000-wrong')::text;
 reset role;
 select 'T9 code: '||count(*) from phone_otps;
 -- read the real code by brute force over the hash (test only)
@@ -31,7 +31,7 @@ create temp table c as select lpad(g::text,6,'0') code from generate_series(0,99
   where encode(sha256(convert_to('11111111-1111-1111-1111-111111111111:'||lpad(g::text,6,'0'),'UTF8')),'hex') = (select code_hash from phone_otps where consumed_at is null);
 grant select on c to authenticated;
 set role authenticated;
-select 'T10 right: '||verify_phone_otp((select code from c));
+select 'T10 right: '||verify_phone_otp((select code from c))::text;
 select 'T11 verified: '||phone||' '||(phone_verified_at is not null) from profiles;
 update profiles set phone='+966599999999' where id=auth.uid();
 select 'T12 changed phone clears verification: '||(phone_verified_at is null) from profiles;
@@ -52,6 +52,8 @@ select 'T16 after delete: users='||(select count(*) from auth.users)||' profiles
 set role anon;
 select request_phone_otp('+966512345678'); -- expect permission denied
 \pset tuples_only on
+reset role;
+drop table if exists c;
 insert into auth.users (id, email) values ('33333333-3333-3333-3333-333333333333','c@x.com'),('44444444-4444-4444-4444-444444444444','d@x.com');
 set role authenticated;
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';

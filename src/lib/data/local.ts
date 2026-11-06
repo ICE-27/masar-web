@@ -25,6 +25,7 @@ import type {
   ProfilePatch,
   SignUpInput,
 } from "./types";
+import type { OpsBackend } from "./ops-types";
 import { DataError } from "./types";
 import { DESTINATIONS } from "./destinations";
 
@@ -210,6 +211,7 @@ export function createLocalBackend(options: LocalOptions = {}): Backend {
   }
 
   return {
+    ...localOpsUnavailable(),
     mode: "local",
 
     async getUser(): Promise<AuthUser | null> {
@@ -241,7 +243,7 @@ export function createLocalBackend(options: LocalOptions = {}): Backend {
       db.profiles.push({
         id,
         email,
-        role: "parent",
+        role: input.role === "driver" ? "driver" : "parent",
         fullName: input.fullName.trim(),
         phone: null,
         phoneVerifiedAt: null,
@@ -489,5 +491,64 @@ export function createLocalBackend(options: LocalOptions = {}): Backend {
       store.remove(SESSION_KEY);
       emit();
     },
+  };
+}
+
+/**
+ * Drivers, bookings and payments need the real database (Supabase): the
+ * seat holds, ledger and verification rules live there. In the in-browser
+ * demo store these explain that instead of pretending.
+ */
+function localOpsUnavailable(): OpsBackend {
+  const no = () => Promise.reject(new DataError("needs_supabase"));
+  return {
+    driverApplication: no,
+    saveApplication: no,
+    uploadDocument: no,
+    updateDocumentExpiry: no,
+    submitApplication: no,
+    fileUrl: () => Promise.resolve(null),
+    mediaUrl: (p) => (p && p.startsWith("/") ? p : null),
+    notifications: () => Promise.resolve([]),
+    markNotificationsRead: () => Promise.resolve(),
+    driverServices: no,
+    driverService: no,
+    saveService: no,
+    checkService: no,
+    archiveService: no,
+    addDestination: no,
+    listDestinationsGeo: no,
+    listDistricts: no,
+    checkHours: no,
+    saveHours: no,
+    blockedDates: no,
+    blockDates: no,
+    unblock: no,
+    setDay: no,
+    driverCalendar: no,
+    searchServices: no,
+    getService: no,
+    quoteBooking: no,
+    createBooking: no,
+    getBooking: no,
+    myBookings: () => Promise.resolve([]),
+    driverBookings: no,
+    respond: no,
+    payBooking: no,
+    cancelPreview: no,
+    cancelBooking: no,
+    wallet: no,
+    invoice: no,
+    earnings: no,
+    adminOverview: no,
+    adminDriverQueue: no,
+    adminDriver: no,
+    reviewDocument: no,
+    decideDriver: no,
+    adminBookings: no,
+    adminSettings: no,
+    saveSettings: no,
+    payoutRun: no,
+    payoutRuns: no,
   };
 }

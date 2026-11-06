@@ -40,7 +40,7 @@ export default async function DriversPage({
     <>
       <PageHeader eyebrow={m.nav.forDrivers} title={d.title} subtitle={d.subtitle}>
         <div className="mt-8">
-          <ButtonLink href={href(locale, "/contact")} size="lg">
+          <ButtonLink href={href(locale, "/driver/join")} size="lg">
             {d.cta}
             <span aria-hidden className="start-arrow">
               →
@@ -156,7 +156,7 @@ export default async function DriversPage({
           ))}
         </ol>
         <div className="mt-12 text-center">
-          <ButtonLink href={href(locale, "/contact")} size="lg">
+          <ButtonLink href={href(locale, "/driver/join")} size="lg">
             {d.cta}
           </ButtonLink>
         </div>

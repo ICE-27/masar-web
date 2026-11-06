@@ -28,7 +28,7 @@ export function formatSaudiMobile(e164: string | null | undefined): string {
 
 /** Whole years between a YYYY-MM-DD birth date and today (Riyadh time). */
 export function ageFrom(dateOfBirth: string, today: Date = new Date()): number | null {
-  const m = dateOfBirth.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const m = String(dateOfBirth ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return null;
   const [, y, mo, d] = m.map(Number);
   const riyadh = new Date(today.getTime() + 3 * 60 * 60 * 1000);

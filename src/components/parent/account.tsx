@@ -18,39 +18,55 @@ import {
   IconTrash,
   IconUser,
   IconUsers,
+  IconCalendar,
+  IconWallet,
 } from "@/components/icons";
 import { AppLink as Link } from "@/components/link";
 import { LocationEditor } from "@/components/map/location-editor";
 import { ButtonLink, cn } from "@/components/ui";
-import type { Address, Child, Consent, Profile } from "@/lib/data";
+import type { Address, BookingCard, Child, Consent, Profile } from "@/lib/data";
 import { errorText, num, t } from "@/lib/format";
 import { href, type Locale } from "@/lib/i18n";
 import type { AppMessages } from "@/lib/messages/app.en";
 import { useNavigate } from "@/lib/nav";
 import { formatSaudiMobile } from "@/lib/validation";
+import { BookingDetailSection, BookingsSection, WalletSection } from "./bookings";
 import { ChildForm } from "./child-form";
 import { PhoneVerify } from "./phone-verify";
 import { ChildRow } from "./wizard";
 
-export type Section = "overview" | "children" | "addresses" | "profile";
+export type Section = "overview" | "bookings" | "booking" | "children" | "addresses" | "wallet" | "profile";
 
-const NAV: { key: Section; path: string; icon: (p: { width: number; height: number }) => ReactNode }[] = [
+const NAV: { key: Exclude<Section, "booking">; path: string; icon: (p: { width: number; height: number }) => ReactNode; mobile?: boolean }[] = [
   { key: "overview", path: "/account", icon: (p) => <IconHome {...p} /> },
+  { key: "bookings", path: "/account/bookings", icon: (p) => <IconCalendar {...p} /> },
   { key: "children", path: "/account/children", icon: (p) => <IconUsers {...p} /> },
-  { key: "addresses", path: "/account/addresses", icon: (p) => <IconMap {...p} /> },
+  { key: "addresses", path: "/account/addresses", icon: (p) => <IconMap {...p} />, mobile: false },
+  { key: "wallet", path: "/account/wallet", icon: (p) => <IconWallet {...p} /> },
   { key: "profile", path: "/account/profile", icon: (p) => <IconUser {...p} /> },
 ];
+
+function navLabel(m: AppMessages, key: Exclude<Section, "booking">): string {
+  if (key === "bookings") return m.ops.nav.myBookings;
+  if (key === "wallet") return m.ops.nav.wallet;
+  return m.account.nav[key];
+}
 
 export function AccountArea({ locale, m, section }: { locale: Locale; m: AppMessages; section: Section }) {
   const { status, profile } = useAuth();
   const navigate = useNavigate();
 
+  const active = section === "booking" ? "bookings" : section;
   useEffect(() => {
     if (status === "signed-out") {
-      const here = href(locale, NAV.find((n) => n.key === section)!.path);
+      const here = section === "booking" ? `${href(locale, "/account/booking")}${typeof window !== "undefined" ? window.location.search : ""}` : href(locale, NAV.find((n) => n.key === active)!.path);
       navigate(`${href(locale, "/login")}?next=${encodeURIComponent(here)}`, { replace: true });
     }
-  }, [status, locale, section, navigate]);
+    // Drivers and the Masar team have their own areas
+    if (status === "signed-in" && profile && profile.role !== "parent") {
+      navigate(href(locale, profile.role === "driver" ? "/driver" : "/admin"), { replace: true });
+    }
+  }, [status, profile, locale, section, active, navigate]);
 
   return (
     <div className="min-h-[calc(100dvh-4rem)] bg-[var(--page-subtle)] pb-24 lg:pb-12">
@@ -62,16 +78,16 @@ export function AccountArea({ locale, m, section }: { locale: Locale; m: AppMess
               <Link
                 key={n.key}
                 href={href(locale, n.path)}
-                aria-current={n.key === section ? "page" : undefined}
+                aria-current={n.key === active ? "page" : undefined}
                 className={cn(
                   "flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors",
-                  n.key === section
+                  n.key === active
                     ? "bg-[var(--card)] text-brand-700 shadow-[var(--shadow-soft)] dark:text-brand-200"
                     : "text-muted hover:bg-[var(--card)] hover:text-[var(--ink)]",
                 )}
               >
                 {n.icon({ width: 20, height: 20 })}
-                {m.account.nav[n.key]}
+                {navLabel(m, n.key)}
               </Link>
             ))}
             <SignOutButton m={m} locale={locale} className="mt-4 w-full border-t border-[var(--line)] pt-4" />
@@ -79,7 +95,7 @@ export function AccountArea({ locale, m, section }: { locale: Locale; m: AppMess
         </aside>
 
         <div className="min-w-0 pt-6 lg:pt-0">
-          {status !== "signed-in" || !profile ? (
+          {status !== "signed-in" || !profile || profile.role !== "parent" ? (
             <div className="space-y-4">
               <Skeleton className="h-9 w-1/2" />
               <Skeleton className="h-5 w-1/3" />
@@ -88,7 +104,7 @@ export function AccountArea({ locale, m, section }: { locale: Locale; m: AppMess
             </div>
           ) : (
             <>
-              {!profile.onboardingCompletedAt && section !== "profile" ? (
+              {!profile.onboardingCompletedAt && section !== "profile" && section !== "booking" ? (
                 <Alert tone="warning" title={m.account.finishTitle} className="mb-6">
                   <p>{t(m.account.finishText, { n: num(profile.onboardingStep, locale) })}</p>
                   <Link href={href(locale, "/signup")} className="mt-2 inline-block font-semibold underline underline-offset-4">
@@ -97,6 +113,9 @@ export function AccountArea({ locale, m, section }: { locale: Locale; m: AppMess
                 </Alert>
               ) : null}
               {section === "overview" ? <Overview locale={locale} m={m} profile={profile} /> : null}
+              {section === "bookings" ? <BookingsSection locale={locale} m={m} /> : null}
+              {section === "booking" ? <BookingDetailSection locale={locale} m={m} /> : null}
+              {section === "wallet" ? <WalletSection locale={locale} m={m} /> : null}
               {section === "children" ? <ChildrenSection locale={locale} m={m} /> : null}
               {section === "addresses" ? <AddressesSection locale={locale} m={m} /> : null}
               {section === "profile" ? <ProfileSection locale={locale} m={m} profile={profile} /> : null}
@@ -112,19 +131,19 @@ export function AccountArea({ locale, m, section }: { locale: Locale; m: AppMess
         className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--line)] bg-[var(--page)]/95 backdrop-blur-md lg:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <ul className="mx-auto grid max-w-lg grid-cols-4">
-          {NAV.map((n) => (
+        <ul className="mx-auto grid max-w-lg grid-cols-5">
+          {NAV.filter((n) => n.mobile !== false).map((n) => (
             <li key={n.key}>
               <Link
                 href={href(locale, n.path)}
-                aria-current={n.key === section ? "page" : undefined}
+                aria-current={n.key === active ? "page" : undefined}
                 className={cn(
-                  "flex min-h-16 flex-col items-center justify-center gap-1 text-[0.7rem] font-medium",
-                  n.key === section ? "text-brand-600 dark:text-brand-300" : "text-muted",
+                  "flex min-h-16 flex-col items-center justify-center gap-1 text-[0.68rem] font-medium",
+                  n.key === active ? "text-brand-600 dark:text-brand-300" : "text-muted",
                 )}
               >
                 {n.icon({ width: 22, height: 22 })}
-                {m.account.nav[n.key]}
+                <span className="max-w-full truncate px-1">{navLabel(m, n.key)}</span>
               </Link>
             </li>
           ))}
@@ -199,20 +218,22 @@ function Overview({ locale, m, profile }: { locale: Locale; m: AppMessages; prof
       <PageTitle title={t(A.hello, { name: (profile.fullName ?? "").split(" ")[0] })} subtitle={A.overviewSubtitle} />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        {/* Find a ride — next milestone */}
         <section className="relative overflow-hidden rounded-2xl bg-brand-600 p-6 text-white xl:col-span-2 dark:bg-brand-800">
           <div aria-hidden className="absolute -end-10 -top-10 h-44 w-44 rounded-full bg-white/10" />
           <div aria-hidden className="absolute -bottom-16 end-24 h-40 w-40 rounded-full bg-accent-400/20" />
           <div className="relative flex flex-wrap items-center justify-between gap-4">
             <div className="max-w-lg">
-              <span className="inline-flex rounded-full bg-accent-400 px-2.5 py-0.5 text-xs font-bold text-brand-950">{A.soon}</span>
-              <h2 className="mt-3 flex items-center gap-2 text-xl font-bold">
+              <h2 className="flex items-center gap-2 text-xl font-bold">
                 <IconSearch width={22} height={22} /> {A.findRideTitle}
               </h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-white/85">{A.findRideText}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-white/85">{m.ops.search.subtitle}</p>
             </div>
+            <ButtonLink href={href(locale, "/search")} variant="accent" size="lg">
+              {m.ops.nav.findRide}
+            </ButtonLink>
           </div>
         </section>
+        <UpcomingBookings m={m} locale={locale} />
 
         <Panel>
           <div className="flex items-center justify-between gap-3">
@@ -854,5 +875,42 @@ function ConfirmDialog({
         </button>
       </div>
     </Dialog>
+  );
+}
+
+function UpcomingBookings({ m, locale }: { m: AppMessages; locale: Locale }) {
+  const { backend } = useAuth();
+  const [items, setItems] = useState<BookingCard[] | null>(null);
+  useEffect(() => {
+    backend.myBookings().then(setItems).catch(() => setItems([]));
+  }, [backend]);
+  const live = (items ?? []).filter((b) => ["pending", "accepted", "confirmed"].includes(b.status));
+  if (!live.length) return null;
+  return (
+    <Panel className="xl:col-span-2">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 font-semibold">
+          <IconCalendar width={20} height={20} className="text-brand-500" /> {m.ops.nav.myBookings}
+        </h2>
+        <Link href={href(locale, "/account/bookings")} className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-brand-600 dark:text-brand-300">
+          {m.account.viewAll} <IconChevron width={16} height={16} className="rtl:rotate-180" />
+        </Link>
+      </div>
+      <ul className="mt-3 divide-y divide-[var(--line)]">
+        {live.slice(0, 3).map((b) => (
+          <li key={b.id}>
+            <Link href={`${href(locale, "/account/booking")}?id=${b.id}`} className="flex items-center justify-between gap-3 py-3 text-sm">
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{b.serviceName}</span>
+                <span className="text-muted">{b.children.map((c) => c.firstName).join(locale === "ar" ? "، " : ", ")}</span>
+              </span>
+              <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", b.status === "accepted" ? "bg-accent-400 text-brand-950" : "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200")}>
+                {b.status === "accepted" ? m.ops.bk.payNow : m.ops.common.bookingStatus[b.status]}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }

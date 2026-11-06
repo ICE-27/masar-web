@@ -19,7 +19,7 @@ export function DemoRibbon({ m }: { m: Messages }) {
   if (hidden) return null;
 
   return (
-    <div className="border-t border-[var(--line)] bg-accent-50 dark:bg-accent-700/15">
+    <div className="no-print border-t border-[var(--line)] bg-accent-50 dark:bg-accent-700/15">
       <div className="container-page flex items-center gap-3 py-2.5 text-xs text-accent-700 dark:text-accent-200">
         <span className="shrink-0 rounded-full bg-accent-400 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-brand-950">
           {m.demo.label}

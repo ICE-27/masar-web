@@ -8,6 +8,8 @@ import { IconLogout, IconUser } from "./icons";
 import { Logo } from "./logo";
 import { ThemeToggle } from "./theme";
 import { ButtonLink, cn } from "./ui";
+import { NotificationBell } from "./ops/notification-bell";
+import { homeFor } from "./ops/area-shell";
 import { href, otherLocale, type Locale } from "@/lib/i18n";
 import type { Messages } from "@/lib/messages/en";
 
@@ -23,9 +25,11 @@ export function SiteHeader({
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
-  const { status, backend } = useAuth();
+  const { status, backend, profile } = useAuth();
   const signedIn = status === "signed-in";
   const a = m.app.common;
+  const home = homeFor(profile?.role);
+  const homeLabel = profile?.role === "driver" ? m.app.ops.nav.driverHome : profile?.role === "admin" ? m.app.ops.nav.admin : a.myAccount;
 
   const items: NavItem[] = [
     { label: m.nav.forDrivers, path: "/drivers" },
@@ -61,7 +65,7 @@ export function SiteHeader({
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 transition-all duration-200",
+        "no-print sticky top-0 z-50 transition-all duration-200",
         scrolled
           ? "border-b border-[var(--line)] bg-[var(--page)]/85 backdrop-blur-md"
           : "border-b border-transparent bg-[var(--page)]",
@@ -115,14 +119,17 @@ export function SiteHeader({
             {status === "loading" ? (
               <span aria-hidden className="hidden h-11 w-32 sm:inline-block" />
             ) : signedIn ? (
-              <ButtonLink
-                href={href(locale, "/account")}
-                size="md"
-                className="hidden sm:inline-flex"
-              >
-                <IconUser width={18} height={18} />
-                {a.myAccount}
-              </ButtonLink>
+              <>
+                <NotificationBell m={m.app} locale={locale} />
+                <ButtonLink
+                  href={href(locale, home)}
+                  size="md"
+                  className="hidden sm:inline-flex"
+                >
+                  <IconUser width={18} height={18} />
+                  {homeLabel}
+                </ButtonLink>
+              </>
             ) : (
               <>
                 <Link
@@ -132,7 +139,7 @@ export function SiteHeader({
                   {a.signIn}
                 </Link>
                 <ButtonLink
-                  href={href(locale, "/signup")}
+                  href={href(locale, "/search")}
                   size="md"
                   className="hidden sm:inline-flex"
                 >
@@ -190,9 +197,14 @@ export function SiteHeader({
           <div className="mt-4 grid gap-2.5">
             {signedIn ? (
               <>
-                <ButtonLink href={href(locale, "/account")} size="lg">
+                {profile?.role === "parent" ? (
+                  <ButtonLink href={href(locale, "/search")} variant="secondary" size="lg">
+                    {m.nav.findRide}
+                  </ButtonLink>
+                ) : null}
+                <ButtonLink href={href(locale, home)} size="lg">
                   <IconUser width={18} height={18} />
-                  {a.myAccount}
+                  {homeLabel}
                 </ButtonLink>
                 <button
                   type="button"
@@ -208,14 +220,14 @@ export function SiteHeader({
               </>
             ) : (
               <>
-                <ButtonLink href={href(locale, "/signup")} size="lg">
+                <ButtonLink href={href(locale, "/search")} size="lg">
                   {m.nav.findRide}
                 </ButtonLink>
                 <ButtonLink href={href(locale, "/login")} variant="secondary" size="lg">
                   {a.signIn}
                 </ButtonLink>
                 <ButtonLink
-                  href={href(locale, "/drivers")}
+                  href={href(locale, "/driver/join")}
                   variant="ghost"
                   size="lg"
                 >

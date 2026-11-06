@@ -1,67 +1,81 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * POST /api/send-otp
- * Sends the OTP code via WhatsApp (Twilio sandbox).
+ * POST /api/send-otp   body: { phone }   header: Authorization: Bearer <user session>
  *
- * Body: { phone: string; code: string }
+ * Asks the database for a one-time code *as the signed-in user* (so the
+ * database's own rules apply: 30 s cooldown, 5 an hour, one verified account
+ * per number), then sends that code to the user's WhatsApp through Twilio.
  *
- * The three TWILIO_* env vars must be set on the server (NOT NEXT_PUBLIC_).
- * If they aren't set, the endpoint returns { sent: false } so the client
- * can fall back to showing the demo code on screen.
+ * Nothing else can be sent through this route: the message text is fixed and
+ * the code comes from the database, never from the browser.
+ *
+ * Twilio is optional. Without TWILIO_* env vars (or if sending fails) the
+ * code is returned for the on-screen demo message, exactly as before.
  */
 export async function POST(req: NextRequest) {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/+$/, "").replace(/\/rest\/v1$/, "");
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  const auth = req.headers.get("authorization") ?? "";
+  if (!url || !anon) return NextResponse.json({ message: "not_configured" }, { status: 501 });
+  if (!/^Bearer\s+\S+$/.test(auth)) return NextResponse.json({ code: "P0001", message: "not_signed_in" }, { status: 401 });
+
+  let phone = "";
+  try {
+    phone = String(((await req.json()) as { phone?: string }).phone ?? "");
+  } catch {
+    return NextResponse.json({ code: "P0001", message: "phone_invalid" }, { status: 400 });
+  }
+  if (!/^\+9665\d{8}$/.test(phone)) return NextResponse.json({ code: "P0001", message: "phone_invalid" }, { status: 400 });
+
+  // 1. The code, from the database, with the database's limits
+  const rpc = await fetch(`${url}/rest/v1/rpc/request_phone_otp`, {
+    method: "POST",
+    headers: { apikey: anon, Authorization: auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ p_phone: phone }),
+    cache: "no-store",
+  });
+  const data = (await rpc.json().catch(() => ({}))) as {
+    expires_at?: string;
+    cooldown_seconds?: number;
+    demo_code?: string | null;
+    code?: string;
+    message?: string;
+    details?: string;
+  };
+  if (!rpc.ok) return NextResponse.json(data, { status: rpc.status });
+
+  // 2. WhatsApp, when Twilio is configured
   const SID = process.env.TWILIO_ACCOUNT_SID;
   const TOKEN = process.env.TWILIO_AUTH_TOKEN;
-  const FROM = process.env.TWILIO_WHATSAPP_FROM; // e.g. +17372508034
-
-  if (!SID || !TOKEN || !FROM) {
-    return NextResponse.json({ sent: false, reason: "twilio_not_configured" });
-  }
-
-  let body: { phone?: string; code?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ sent: false, reason: "invalid_body" }, { status: 400 });
-  }
-
-  const { phone, code } = body;
-  if (!phone || !code) {
-    return NextResponse.json({ sent: false, reason: "missing_fields" }, { status: 400 });
-  }
-
-  // Twilio WhatsApp sandbox: numbers must be in E.164 format
-  // Saudi numbers: 05XXXXXXXX → +9665XXXXXXXX
-  const e164 = phone.startsWith("+") ? phone : `+966${phone.replace(/^0/, "")}`;
-
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`;
-
-  const params = new URLSearchParams({
-    From: `whatsapp:${FROM}`,
-    To: `whatsapp:${e164}`,
-    Body: `Your Masar verification code is: ${code}\n\nرمز التحقق من مسار: ${code}`,
-  });
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: "Basic " + Buffer.from(`${SID}:${TOKEN}`).toString("base64"),
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params.toString(),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error("Twilio error:", err);
-      return NextResponse.json({ sent: false, reason: "twilio_error", detail: err.message });
+  const FROM = process.env.TWILIO_WHATSAPP_FROM;
+  let channel: "whatsapp" | "screen" = "screen";
+  if (SID && TOKEN && FROM && data.demo_code) {
+    try {
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
+        method: "POST",
+        headers: {
+          Authorization: "Basic " + Buffer.from(`${SID}:${TOKEN}`).toString("base64"),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          From: `whatsapp:${FROM}`,
+          To: `whatsapp:${phone}`,
+          Body: `رمز التحقق من مسار: ${data.demo_code}\nYour Masar verification code: ${data.demo_code}`,
+        }).toString(),
+      });
+      if (res.ok) channel = "whatsapp";
+      else console.error("Twilio:", res.status, await res.text().catch(() => ""));
+    } catch (e) {
+      console.error("Twilio:", e);
     }
-
-    return NextResponse.json({ sent: true });
-  } catch (e) {
-    console.error("Twilio fetch error:", e);
-    return NextResponse.json({ sent: false, reason: "network_error" });
   }
+
+  return NextResponse.json({
+    expires_at: data.expires_at,
+    cooldown_seconds: data.cooldown_seconds,
+    // Demo mode still shows the code: the Twilio sandbox only delivers to numbers that joined it
+    demo_code: data.demo_code ?? null,
+    channel,
+  });
 }

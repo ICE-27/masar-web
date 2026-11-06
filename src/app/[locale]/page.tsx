@@ -66,7 +66,7 @@ export default async function HomePage({
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <ButtonLink href={href(locale, "/signup")} size="lg">
+                <ButtonLink href={href(locale, "/search")} size="lg">
                   {h.primaryCta}
                   <span aria-hidden className="start-arrow">
                     →
@@ -367,7 +367,7 @@ export default async function HomePage({
             {h.cta.subtitle}
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <ButtonLink href={href(locale, "/signup")} variant="accent" size="lg">
+            <ButtonLink href={href(locale, "/search")} variant="accent" size="lg">
               {h.cta.parent}
             </ButtonLink>
             <Link
